@@ -1,0 +1,9 @@
+{
+     "name": "SandboxedLuaCombinator",
+     "version": "0.2.3",
+     "title": "Sandboxed LuaCombinator",
+     "author": "IWTDU",
+     "dependencies": ["base"],
+     "description": "Program combinators for what you need with lua.",
+     "factorio_version": "0.18"
+   }

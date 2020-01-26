@@ -1,0 +1,33 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.2.1
+Date: 2020-01-23
+  Bugfixes:
+    - Fixed error when adding mod to save.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2020-01-23
+  Features:
+    - New syntax highlighter.
+
+  Changes:
+    - Global variables now preserved, no need to use 'var' table anymore.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.1.1
+Date: 2020-01-21
+  Features:
+    - Factorio 0.18 update.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: 2020-01-20
+  Features:
+    - 20% faster than previous version.
+
+---------------------------------------------------------------------------------------------------
+Version: 0.0.8
+Date: 2020-01-20
+  Features:
+    - Now 30% faster than original mod (when reading both color networks and changing output values each tick)
+    - Various internal improvements.

@@ -1,0 +1,18 @@
+{
+    "Lua.diagnostics.globals": [
+        "global",
+        "script",
+        "defines",
+        "game",
+        "settings",
+        "serpent",
+        "data",
+        "util",
+        "make_4way_animation_from_spritesheet",
+        "table_size",
+        "log"
+    ],
+    "Lua.diagnostics.disable": [
+        "lowercase-global"
+    ]
+}
