@@ -48,6 +48,40 @@ end
 combinators_local_cbs = {}
 
 
+local settings_cache = {}
+
+function settings_cache:get(player_id, sett_name)
+	if not self[player_id] then
+		local pl = game.players[player_id]
+		self[player_id] = { indent_code = pl.mod_settings['luacomsb-indent-code'].value,
+							colorize_code = pl.mod_settings['luacomsb-colorize-code'].value
+						}
+	end
+	return self[player_id][sett_name]
+end
+
+function settings_cache:update(player_id, ext_sett_name)
+	local pl = game.players[player_id]
+	if not self[player_id] then
+		self[player_id] = { indent_code = pl.mod_settings['luacomsb-indent-code'].value,
+							colorize_code = pl.mod_settings['luacomsb-colorize-code'].value}
+	else
+		local sett_name_adapt = ext_sett_name:gsub('luacomsb%-',''):gsub('%-','_')
+		assert( self[player_id][sett_name_adapt] )
+		self[player_id][sett_name_adapt] = pl.mod_settings[ext_sett_name].value
+	end
+end
+
+local function on_runtime_mod_setting_changed( ev )
+	game.print(ev.player_index..': '..ev.setting)
+	settings_cache:update(ev.player_index, ev.setting)
+end
+
+script.on_event(defines.events.on_runtime_mod_setting_changed, on_runtime_mod_setting_changed)
+
+
+
+
 script.on_init( function ()
 	global.combinators = {}
 	global.guis = {}
@@ -488,7 +522,6 @@ end
 
 
 
-
 local function find_difference (current, cache)
 	if current == cache then return nil end
 	-- printt('-------------')
@@ -555,8 +588,8 @@ script.on_event(defines.events.on_gui_text_changed, function(event)
 	local eid = find_eid_for_gui_element(event.element)
 	if not eid then return end
 	-- print('on_gui_text_changed')
-	local indent_setting = settings.global["luacomsb-indent-code"].value
-	local colorize_setting = settings.global["luacomsb-colorize-code"].value
+	local indent_setting = settings_cache:get(event.player_index, 'indent_code' )
+	local colorize_setting = settings_cache:get(event.player_index, 'colorize_code' )
 	if event.element.name == "luacomsb_code" then
 		if not global.textboxes then
 			global.textboxes = {}
@@ -584,7 +617,7 @@ script.on_event(defines.events.on_gui_text_changed, function(event)
 			local cursor, upd_col, upd_flow = find_difference(current,cache)
 			if cursor then
 				if upd_col or upd_flow then
-					event.element.text, cursor = format_code(current, cursor, upd_flow)
+					event.element.text, cursor = format_code(current, colorize_setting, upd_flow, cursor)
 					event.element.select(cursor,cursor-1)
 				end
 			end
@@ -608,9 +641,9 @@ function remove_colors(text)
 	return text
 end
 
-function format_code(text, tracked_pos, upd_flow)
-	local indent_setting = settings.global["luacomsb-indent-code"].value
-	local colorize_setting = settings.global["luacomsb-colorize-code"].value
+function format_code(text, colorize, upd_flow, tracked_pos)
+	colorize = colorize or true
+	upd_flow = upd_flow or true
 
 	local cursor = tracked_pos
 	local tracking = true
@@ -652,7 +685,7 @@ function format_code(text, tracked_pos, upd_flow)
 
 	local indent = 0
 	local indentator = '  '
-	if colorize_setting or indent_setting then
+	if colorize or upd_flow then
 		local lexed = lex(result)
 		local blue = {"and","break","do","else","elseif","end","false","for","function","goto","if","in","local","nil","not","or","repeat","return","then","true","until","while"}
 		local lightblue = {"assert","collectgarbage","dofile","error","getfenv","getmetatable","ipairs","load","loadfile","loadstring","module","next","pairs","pcall","print","rawequal","rawget","rawlen","rawset","require","select","setfenv","setmetatable","tonumber","tostring","type","unpack","xpcall","string","table","math","bit32","coroutine","io","os","debug","package"}
@@ -703,14 +736,14 @@ function format_code(text, tracked_pos, upd_flow)
 
 				local pre, post = rttag(color, font)
 
-				if pre ~= '' then
+				if pre ~= '' and colorize then
 					table.insert(line_t, pre)
 					line_t.tags[#line_t] = true
 				end
 
 				table.insert(line_t, token.data)
 
-				if post ~= '' then
+				if post ~= '' and colorize then
 					table.insert(line_t, post)
 					line_t.tags[#line_t] = true
 				end
