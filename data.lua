@@ -1,13 +1,29 @@
 sp = 	{
-				"automation-science-pack",
-				"logistic-science-pack", 
-				"chemical-science-pack", 
-				"military-science-pack", 
-				"production-science-pack",
-				"utility-science-pack"
-		}
+        "automation-science-pack",
+        "logistic-science-pack", 
+        "chemical-science-pack", 
+        "military-science-pack", 
+        "production-science-pack",
+        "utility-science-pack"
+    }
+    
 
-
+local trans = {
+  filename = '__crafting_combinator__/graphics/trans.png',
+  width = 1,
+  height = 1,
+}
+local con_point = {
+  wire = {
+    red = {0, 0},
+    green = {0, 0},
+  },
+  shadow = {
+    red = {0, 0},
+    green = {0, 0},
+  },
+}
+    
 
 combinator = table.deepcopy(data.raw["constant-combinator"]["constant-combinator"])
 combinator.name = "lua-combinator-sb"
@@ -66,9 +82,9 @@ blueprint_data.sprites = {
         x = 0,
         y = 0,
         width = 32,
-  	    height = 32,
+        height = 32,
         shift = {0.078125, 0.15625},
-		
+    
       },
       south = {
         filename = "__SandboxedLuaCombinator__/graphics/transparent32.png",
@@ -77,7 +93,7 @@ blueprint_data.sprites = {
         width = 32,
         height = 32,
         shift = {0.078125, 0.15625},
-		
+    
       },
       east = {
         filename = "__SandboxedLuaCombinator__/graphics/transparent32.png",
@@ -86,7 +102,7 @@ blueprint_data.sprites = {
         width = 32,
         height = 32,
         shift = {0.078125, 0.15625},
-		
+    
       },
       west = {
         filename = "__SandboxedLuaCombinator__/graphics/transparent32.png",
@@ -95,7 +111,7 @@ blueprint_data.sprites = {
         width = 32,
         height = 32,
         shift = {0.078125, 0.15625},
-		
+    
       }
     }
 
@@ -105,9 +121,9 @@ blueprint_data_item.icon = "__SandboxedLuaCombinator__/graphics/blueprint_data.p
 blueprint_data_item.icon_size = 64
 blueprint_data_item.place_result = "luacomsb_blueprint_data"
 if blueprint_data_item.flags then
-	table.insert(blueprint_data_item.flags, "hidden")
+  table.insert(blueprint_data_item.flags, "hidden")
 else
-	blueprint_data_item.flags = {"hidden"}
+  blueprint_data_item.flags = {"hidden"}
 end
 
 
@@ -154,22 +170,41 @@ data:extend({
     },
     result = "lua-combinator-sb-sep"
   },
-	
-	{
-		type = "recipe",
-		name = "lua-combinator-sb",
-		icon_size = 64,
-		enabled = "false",
-		ingredients =
-		{
-			{"constant-combinator", 1},
-			{"small-lamp", 1},
-			{"advanced-circuit", 5}
-		},
-		result = "lua-combinator-sb"
-	},
-	
-	{
+  
+  {
+    type = "recipe",
+    name = "lua-combinator-sb",
+    icon_size = 64,
+    enabled = "false",
+    ingredients =
+    {
+      {"constant-combinator", 1},
+      {"small-lamp", 1},
+      {"advanced-circuit", 5}
+    },
+    result = "lua-combinator-sb"
+  },
+  {
+    type = 'constant-combinator',
+    name = 'lua-combinator-sb-proxy',
+    flags = {'placeable-off-grid'},
+    collision_mask = {},
+    item_slot_count = 500,
+    circuit_wire_max_distance = 3,
+    sprites = {
+      north = trans,
+      east = trans,
+      south = trans,
+      west = trans,
+    },
+    activity_led_sprites = trans,
+    activity_led_light_offsets = {{0, 0}, {0, 0}, {0, 0}, {0, 0}},
+    
+    circuit_wire_connection_points = {con_point, con_point, con_point, con_point},
+    draw_circuit_wires = false,
+  },
+
+  {
     type = "technology",
     name = "lua-combinator-sb",
     icon_size = 144,

@@ -233,7 +233,6 @@ function load_code(code,id)
 	local code = (test or "")
 	global.combinators[id].code = code
 	combinators_local[id].func, global.combinators[id].errors = load_combinator_code(id)
-	-- combinators_local[id].func = global.combinators[id].func ------------------
 	if not global.combinators[id].errors then
 		global.combinators[id].errors = ""
 	end
@@ -242,7 +241,9 @@ function load_code(code,id)
 	local _, countgreen = string.gsub(global.combinators[id].code, "greennet", "")
 	global.combinators[id].usered = (countred > 0)
 	global.combinators[id].usegreen = (countgreen > 0)
-	write_to_combinator(global.combinators[id].blueprint_data,global.combinators[id].code)
+	if not global.combinators[id].sep then
+		write_to_combinator(global.combinators[id].blueprint_data,global.combinators[id].code)
+	end
 	if global.combinators[id].entity.valid then
 		for _, player in pairs(game.players) do
 			player.remove_alert{entity = global.combinators[id].entity}
@@ -281,6 +282,29 @@ local function on_built_entity(event)
 		global.combinators[unit_id].blueprint_data.destructible = false
 		global.combinators[unit_id].blueprint_data.minable = false
 		write_to_combinator(global.combinators[unit_id].blueprint_data,global.combinators[unit_id].code)
+	elseif event.created_entity.valid and event.created_entity.name == "lua-combinator-sb-sep" then
+		local unit_id = event.created_entity.unit_number
+		combinators_local.register(unit_id)
+
+		local output_proxy = event.created_entity.surface.create_entity {
+			name = 'lua-combinator-sb-proxy',
+			position = event.created_entity.position,
+			force = event.created_entity.force,
+			create_build_effect_smoke = false
+		}
+		event.created_entity.connect_neighbour {
+			wire = defines.wire_type.red,
+			target_entity = output_proxy,
+			source_circuit_id = defines.circuit_connector_id.combinator_output,
+		}
+		event.created_entity.connect_neighbour {
+			wire = defines.wire_type.green,
+			target_entity = output_proxy,
+			source_circuit_id = defines.circuit_connector_id.combinator_output,
+		}
+	
+		output_proxy.destructible = false
+		global.combinators[unit_id] = {sep = true, output_proxy=output_proxy, formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", output={}, next_tick=1, usegreen = false, usered = false}
 	end
 end
 
@@ -441,8 +465,15 @@ function combinator_tick(unit_nr)
 			global.combinators[unit_nr]=nil
 			return
 		else
-			combinators_local_cbs[tbl.entity] = combinators_local_cbs[tbl.entity] or tbl.entity.get_or_create_control_behavior()
-			local control = combinators_local_cbs[tbl.entity]
+			local target_out_comb
+			if not tbl.sep then
+				target_out_comb = tbl.entity
+			else
+				target_out_comb = tbl.output_proxy
+			end
+
+			combinators_local_cbs[target_out_comb] = combinators_local_cbs[target_out_comb] or target_out_comb.get_or_create_control_behavior()
+			local control = combinators_local_cbs[target_out_comb]
 			-- local control = tbl.entity.get_or_create_control_behavior()
 			control.parameters={parameters=actual_output}
 		end
@@ -460,6 +491,7 @@ end
 
 script.on_event(defines.events.on_built_entity, on_built_entity)
 script.on_event(defines.events.on_robot_built_entity, on_built_entity)
+
 script.on_event(defines.events.on_entity_settings_pasted, on_entity_settings_pasted)
 
 script.on_event(defines.events.on_tick, on_tick)
@@ -482,7 +514,10 @@ end
 
 function get_col_network (entity, output, wire_type)
 	combinators_local_cbs[entity] = combinators_local_cbs[entity] or entity.get_control_behavior()
-	local cnw = combinators_local_cbs[entity].get_circuit_network(wire_type)
+	local is_sep = global.combinators[entity.unit_number].sep
+	local ccid = is_sep and defines.circuit_connector_id.constant_combinator or defines.circuit_connector_id.combinator_input
+	local cnw = combinators_local_cbs[entity].get_circuit_network(wire_type, ccid)
+	if is_sep then output={} end
 	local ret_red = {}
 	if cnw and cnw.signals then
 		for _, tbl in pairs(cnw.signals) do
@@ -532,7 +567,7 @@ end)
 script.on_event(defines.events.on_gui_opened, function(event)
 	if not event.entity then return end
 	local player = game.players[event.player_index]
-	if player.opened ~= nil and player.opened.name == "lua-combinator-sb" then
+	if player.opened ~= nil and (player.opened.name == "lua-combinator-sb" or player.opened.name == "lua-combinator-sb-sep") then
 		local ent = player.opened
 		local eid = ent.unit_number
 		player.opened = nil
