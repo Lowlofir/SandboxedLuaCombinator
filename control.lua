@@ -67,13 +67,13 @@ function settings_cache:update(player_id, ext_sett_name)
 							colorize_code = pl.mod_settings['luacomsb-colorize-code'].value}
 	else
 		local sett_name_adapt = ext_sett_name:gsub('luacomsb%-',''):gsub('%-','_')
-		assert( self[player_id][sett_name_adapt] )
+		assert( self[player_id][sett_name_adapt] ~= nil )
 		self[player_id][sett_name_adapt] = pl.mod_settings[ext_sett_name].value
 	end
 end
 
 local function on_runtime_mod_setting_changed( ev )
-	game.print(ev.player_index..': '..ev.setting)
+	-- game.print(ev.player_index..': '..ev.setting)
 	settings_cache:update(ev.player_index, ev.setting)
 end
 
@@ -119,7 +119,7 @@ local function migrate_if_required(changes)
 
 	if (not new_ver) or (not old_ver) then return end
 	if new_ver == old_ver then
-		game.print('SandboxedLuaCombinator: new_ver == old_ver')
+		log('SandboxedLuaCombinator: new_ver == old_ver!?')
 		return
 	end
 
@@ -611,7 +611,8 @@ function gui_manager:create_gui(player, entity)
 		elem.tooltip="Toggle code formatting"
 		elem.style.height=18
 		elem.style.width=18
-		elem.state = global.combinators[entity_id].formatting
+		elem.enabled = (indent_setting or colorize_setting)
+		elem.state = global.combinators[entity_id].formatting and elem.enabled
 	elem=gui.flow.add{type = "flow", name = "flow2", direction = "horizontal"}
 		--elem.style.width=95
 		elem.style.horizontally_stretchable = true
@@ -707,7 +708,7 @@ function comb_gui_class:on_gui_click(comb_id, elname, preset_i, event)
 	local gui = gui_t.gui
 	local indent_setting = settings_cache:get(gui.player_index, 'indent_code' )
 	local colorize_setting = settings_cache:get(gui.player_index, 'colorize_code' )
-	game.print('colorize_setting'..tostring(colorize_setting))
+	-- game.print('colorize_setting'..tostring(colorize_setting))
 
 	if elname == 'ok_btn' then
 		local code = gui_t.code_tb.text

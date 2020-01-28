@@ -1,4 +1,14 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.3
+Date: 2020-01-23
+  Features:
+    - Mod settings are per-player now.
+
+  Bugfixes:
+    - Fixed bugs found in multiplayer.
+    - Fixed bugs related to mod settings.
+
+---------------------------------------------------------------------------------------------------
 Version: 0.2.1
 Date: 2020-01-23
   Bugfixes:
