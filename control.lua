@@ -138,6 +138,15 @@ local function migrate_if_required(changes)
 
 end
 
+local function reenable_recipes()
+	for _, force in pairs(game.forces) do
+		if force.technologies['lua-combinator-sb'].researched then
+			force.recipes['lua-combinator-sb'].enabled = true
+			force.recipes['lua-combinator-sb-sep'].enabled = true
+		end
+	end
+end
+
 script.on_configuration_changed(function(changes)
 	global.signals={}
 	for name, _ in pairs(game.virtual_signal_prototypes) do
@@ -166,6 +175,7 @@ script.on_configuration_changed(function(changes)
 
 	-- game.print(serpent.block(changes))
 	migrate_if_required(changes.mod_changes)
+	reenable_recipes()
 end)
 
 
@@ -178,23 +188,24 @@ script.on_load( function ()
 	end
 end)
 
-script.on_event(defines.events.on_pre_ghost_deconstructed, function(event)
-	if event.ghost and event.ghost.type == "entity-ghost" and event.ghost.ghost_name == "lua-combinator-sb" then
-		local spot= event.ghost.surface.find_entities_filtered{name="entity-ghost", inner_name="luacomsb_blueprint_data", ghost_name="luacomsb_blueprint_data", area= {{event.ghost.position.x-0.1,event.ghost.position.y-0.1},{event.ghost.position.x+0.1,event.ghost.position.y+0.1}}}
-		if #spot >0 then
+local function on_destroyed(ev)
+	local entity = ev.entity or ev.ghost
+	game.print(entity.name..' : '..entity.type)
+	if entity.name == 'lua-combinator-sb-sep' then
+		global.combinators[entity.unit_number].output_proxy.destroy()
+	elseif entity.name == 'entity-ghost' and (entity.ghost_name == "lua-combinator-sb" or entity.ghost_name == "lua-combinator-sb-sep") then
+		local spot= entity.surface.find_entities_filtered{name="entity-ghost", ghost_name="luacomsb_blueprint_data", area= {{entity.position.x-0.1,entity.position.y-0.1},{entity.position.x+0.1,entity.position.y+0.1}}}
+		if #spot > 0 then
 			spot[1].destroy()
 		end
 	end
-end)
+end
 
-script.on_event(defines.events.on_player_mined_entity, function(event)
-	if event.entity  and event.entity.name == "entity-ghost" and event.entity.ghost_name == "lua-combinator-sb" then
-		local spot= event.entity .surface.find_entities_filtered{name="entity-ghost", inner_name="luacomsb_blueprint_data", ghost_name="luacomsb_blueprint_data", area= {{event.entity.position.x-0.1,event.entity.position.y-0.1},{event.entity.position.x+0.1,event.entity.position.y+0.1}}}
-		if #spot >0 then
-			spot[1].destroy()
-		end
-	end
-end)
+script.on_event(defines.events.on_pre_player_mined_item, on_destroyed)
+script.on_event(defines.events.on_robot_pre_mined, on_destroyed)
+script.on_event(defines.events.on_entity_died, on_destroyed)
+script.on_event(defines.events.on_pre_ghost_deconstructed, on_destroyed)
+
 
 function load_combinator_code(id)
 	local env_ro, env_var = create_env(global.combinators[id].variables)
@@ -241,9 +252,7 @@ function load_code(code,id)
 	local _, countgreen = string.gsub(global.combinators[id].code, "greennet", "")
 	global.combinators[id].usered = (countred > 0)
 	global.combinators[id].usegreen = (countgreen > 0)
-	if not global.combinators[id].sep then
-		write_to_combinator(global.combinators[id].blueprint_data,global.combinators[id].code)
-	end
+	write_to_combinator(global.combinators[id].blueprint_data,global.combinators[id].code)
 	if global.combinators[id].entity.valid then
 		for _, player in pairs(game.players) do
 			player.remove_alert{entity = global.combinators[id].entity}
@@ -256,27 +265,18 @@ local function on_built_entity(event)
 		local unit_id = event.created_entity.unit_number
 		combinators_local.register(unit_id)
 		global.combinators[unit_id] = {formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", output={}, next_tick=1, usegreen = false, usered = false}
-		local blueprint_data983 = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
-		if blueprint_data983[1] then
-			global.combinators[unit_id].code=read_from_combinator(blueprint_data983[1])
+		local blueprint_data = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
+		if blueprint_data[1] then
+			global.combinators[unit_id].code=read_from_combinator(blueprint_data[1])
 			combinators_local[unit_id].func,global.combinators[unit_id].errors = load_combinator_code(unit_id)
-			-- combinators_local[unit_id].func = global.combinators[unit_id].func
 			if not global.combinators[unit_id].errors then
 				global.combinators[unit_id].errors = ""
 			end
 			local _, countred = string.gsub(global.combinators[unit_id].code, "rednet", "")
 			local _, countgreen = string.gsub(global.combinators[unit_id].code, "greennet", "")
-			if countred > 0 then
-				global.combinators[unit_id].usered = true
-			else
-				global.combinators[unit_id].usered = false
-			end
-			if countgreen > 0 then
-				global.combinators[unit_id].usegreen = true
-			else
-				global.combinators[unit_id].usegreen = false
-			end
-			blueprint_data983[1].destroy()
+			global.combinators[unit_id].usered = (countred > 0)
+			global.combinators[unit_id].usegreen = (countgreen > 0)
+			blueprint_data[1].destroy()
 		end
 		global.combinators[unit_id].blueprint_data = event.created_entity.surface.create_entity{name = "luacomsb_blueprint_data", position = event.created_entity.position, force = event.created_entity.force}
 		global.combinators[unit_id].blueprint_data.destructible = false
@@ -305,12 +305,34 @@ local function on_built_entity(event)
 	
 		output_proxy.destructible = false
 		global.combinators[unit_id] = {sep = true, output_proxy=output_proxy, formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", output={}, next_tick=1, usegreen = false, usered = false}
+	
+	
+		local blueprint_data = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
+		if blueprint_data[1] then
+			global.combinators[unit_id].code=read_from_combinator(blueprint_data[1])
+			combinators_local[unit_id].func,global.combinators[unit_id].errors = load_combinator_code(unit_id)
+			if not global.combinators[unit_id].errors then
+				global.combinators[unit_id].errors = ""
+			end
+			local _, countred = string.gsub(global.combinators[unit_id].code, "rednet", "")
+			local _, countgreen = string.gsub(global.combinators[unit_id].code, "greennet", "")
+			global.combinators[unit_id].usered = (countred > 0)
+			global.combinators[unit_id].usegreen = (countgreen > 0)
+			blueprint_data[1].destroy()
+		end
+		global.combinators[unit_id].blueprint_data = event.created_entity.surface.create_entity{name = "luacomsb_blueprint_data", position = event.created_entity.position, force = event.created_entity.force}
+		global.combinators[unit_id].blueprint_data.destructible = false
+		global.combinators[unit_id].blueprint_data.minable = false
+		write_to_combinator(global.combinators[unit_id].blueprint_data,global.combinators[unit_id].code)
+
 	end
 end
 
 
 local function on_entity_settings_pasted(event)
-	if event.source.name == "lua-combinator-sb" and event.destination.name == "lua-combinator-sb" then
+	local name1 = "lua-combinator-sb"
+	local name2 = "lua-combinator-sb-sep"
+	if (event.source.name == name1 or event.source.name == name2) and (event.destination.name == name1 or event.destination.name == name2) then
 		local dst_id = event.destination.unit_number
 		local src_id = event.source.unit_number
 		global.combinators[dst_id].code = global.combinators[src_id].code

@@ -29,6 +29,7 @@ combinator = table.deepcopy(data.raw["constant-combinator"]["constant-combinator
 combinator.name = "lua-combinator-sb"
 combinator.item_slot_count = 500
 combinator.minable = {mining_time = 0.5, result = "lua-combinator-sb"}
+combinator.additional_pastable_entities = {'lua-combinator-sb-sep'}
 combinator.sprites = make_4way_animation_from_spritesheet({ layers =
       {
         {
@@ -71,6 +72,7 @@ combinator.sprites = make_4way_animation_from_spritesheet({ layers =
 blueprint_data = table.deepcopy(data.raw["constant-combinator"]["constant-combinator"])
 blueprint_data.name = "luacomsb_blueprint_data"
 table.insert(blueprint_data.flags, "hide-alt-info")
+table.insert(blueprint_data.flags, "placeable-off-grid")
 blueprint_data.order = "xxxx"
 blueprint_data.item_slot_count = 500
 blueprint_data.selection_box={{-0.5,-0.5},{-0.25,-0.25}}
@@ -129,14 +131,14 @@ end
 
 combinator2 = table.deepcopy(data.raw["arithmetic-combinator"]["arithmetic-combinator"])
 combinator2.name = "lua-combinator-sb-sep"
-combinator2.minable.result = "lua-combinator-sb-sep"
+combinator2.minable = {mining_time = 0.5, result = "lua-combinator-sb-sep"}
+combinator2.additional_pastable_entities = {'lua-combinator-sb'}
 combinator2.energy_source = { type = 'void' }
 combinator2.energy_usage_per_tick = '1W'
 
 local combinator2_item = table.deepcopy(data.raw['item']['arithmetic-combinator'])
 combinator2_item.name = combinator2.name
 combinator2_item.place_result = combinator2.name
--- combinator2_item.icons = icons.of(combinator2)
 combinator2_item.subgroup = 'circuit-network'
 -- combinator2_item.order = 'c[combinators]-m[recipe-combinator]'
 
@@ -162,7 +164,7 @@ data:extend({
     type = "recipe",
     name = "lua-combinator-sb-sep",
     icon_size = 64,
-    enabled = "true",
+    enabled = "false",
     ingredients =
     {
       {"arithmetic-combinator", 1},
