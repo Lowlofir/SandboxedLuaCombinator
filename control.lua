@@ -180,6 +180,9 @@ script.on_load( function ()
 	for k,v in pairs(global.combinators) do
 		combinators_local.register(k)
 	end
+	for k,v in pairs(global.guis) do
+		setmetatable(v, {__index=comb_gui_class})
+	end
 end)
 
 script.on_event(defines.events.on_pre_ghost_deconstructed, function(event)
@@ -522,7 +525,350 @@ end
 
 
 
-local function find_difference (current, cache)
+gui_manager = {}
+comb_gui_class = {}
+
+function gui_manager:on_gui_text_changed(ev)
+	local eid = find_eid_for_gui_element(ev.element)
+	if not eid then return end
+	global.guis[eid]:on_gui_text_changed(eid, ev)
+end
+
+function gui_manager:on_gui_click(ev)
+	local comb_id, elname, preset_i = find_eid_for_gui_element(ev.element)
+	if not comb_id then return end
+	-- log(serpent.block(global.guis[comb_id]))
+	global.guis[comb_id]:on_gui_click(comb_id, elname, preset_i, ev)
+end
+
+function gui_manager:open(player, entity)
+	local gui_data = self:create_gui(player, entity)
+	setmetatable(gui_data, {__index=comb_gui_class})
+	global.guis[entity.unit_number]=gui_data
+	player.opened=gui_data.gui
+end
+
+function gui_manager:create_gui(player, entity)
+	local indent_setting = settings_cache:get(player.index, 'indent_code' )
+	local colorize_setting = settings_cache:get(player.index, 'colorize_code' )
+
+	local entity_id = entity.unit_number
+	local this_gui_data = {}
+	local gui = player.gui.center.add{type = "frame", name = "luacomsb_gui_"..entity_id, caption = "", direction = "vertical"}
+	this_gui_data.gui = gui
+		gui.caption = "rednet[], greennet[], var[], output[], delay"
+		gui.style.top_padding 		= 1
+		gui.style.right_padding 	= 4
+		gui.style.bottom_padding 	= 4
+		gui.style.left_padding 		= 4
+		--gui.style.scaleable 		= false
+	gui.add{type = "flow", name = "flow", direction = "horizontal"}
+		gui.flow.style.width = 799
+	local elem = gui.flow.add{type = "sprite-button", name = "luacomsb_x_"..entity_id, direction = "horizontal"}
+	this_gui_data.x_btn = elem
+		elem.style.height=20
+		elem.style.width=20
+		elem.style.top_padding=0
+		elem.style.bottom_padding=0
+		elem.style.left_padding=0
+		elem.style.right_padding=0
+		--elem.style.disabled_font_color ={r=1,g=1,b=1}
+		elem.sprite="luacomsb_close"
+	elem = gui.flow.add{type = "sprite-button", name = "luacomsb_help", direction = "horizontal"}
+		elem.style.height=20
+		elem.style.width=20
+		elem.style.top_padding=0
+		elem.style.bottom_padding=0
+		elem.style.left_padding=0
+		elem.style.right_padding=0
+		elem.sprite="luacomsb_questionmark"
+	elem=gui.flow.add{type = "flow", name = "flow1", direction = "horizontal"}
+		elem.style.width=15
+	elem = gui.flow.add{type="sprite-button", name = "luacomsb_back", state = true}
+	this_gui_data.bw_btn = elem
+		elem.style.height=20
+		elem.style.width=20
+		elem.style.top_padding=0
+		elem.style.bottom_padding=0
+		elem.style.left_padding=0
+		elem.style.right_padding=0
+		elem.sprite="luacomsb_back"
+		elem.hovered_sprite ="luacomsb_back"
+		elem.clicked_sprite ="luacomsb_back"
+	elem = gui.flow.add{type="sprite-button", name = "luacomsb_forward", state = true}
+	this_gui_data.fw_btn = elem
+		elem.style.height=20
+		elem.style.width=20
+		elem.style.top_padding=0
+		elem.style.bottom_padding=0
+		elem.style.left_padding=0
+		elem.style.right_padding=0
+		elem.sprite="luacomsb_forward"
+		elem.hovered_sprite ="luacomsb_forward"
+		elem.clicked_sprite  ="luacomsb_forward"
+	elem = gui.flow.add{type="checkbox", name = "luacomsb_formatting", state = true}
+	this_gui_data.formatting_cb = elem
+		elem.tooltip="Toggle code formatting"
+		elem.style.height=18
+		elem.style.width=18
+		elem.state = global.combinators[entity_id].formatting
+	elem=gui.flow.add{type = "flow", name = "flow2", direction = "horizontal"}
+		--elem.style.width=95
+		elem.style.horizontally_stretchable = true
+	local preset_btns = {}
+	for i=0,20 do
+		elem = gui.flow.add{type = "button", name = "luacomsb_preset_"..i, direction = "horizontal",caption=i}
+		preset_btns[i] = elem
+			elem.style.height=20
+			elem.style.width=27
+			elem.style.top_padding=0
+			elem.style.bottom_padding=0
+			elem.style.left_padding=0
+			elem.style.right_padding=0
+		if not global.presets[i+1] then
+			elem.style.font_color = {r=0.3,g=0.3,b=0.3}
+			elem.style.hovered_font_color  = {r=0.3,g=0.3,b=0.3}
+		else
+			elem.tooltip = global.presets[i+1]
+		end
+	end
+	this_gui_data.preset_btns = preset_btns
+	elem = gui.add{type = "table", column_count=2, name = "main_table", direction = "vertical"}
+		elem.style.vertical_align = "top"
+	elem = gui.main_table.add{type = "flow", column_count=1, name = "left_table", direction = "vertical"}
+		elem.style.vertical_align = "top"
+		--elem.style.vertically_stretchable = true
+		--elem.style.vertically_squashable = false
+	elem = gui.main_table.left_table.add{type = "scroll-pane",  name = "code_scroll", direction = "vertical"}
+		--elem.style.vertically_stretchable = true
+		--elem.style.vertically_squashable = false
+		elem.style.maximal_height = 700
+	elem = gui.main_table.left_table.code_scroll.add{type = "table", column_count=1, name = "code_table", direction = "vertical"}
+		--elem.style.vertically_stretchable = true
+		--elem.style.vertically_squashable = false
+	elem = gui.main_table.left_table.code_scroll.code_table.add{type = "text-box", name = "luacomsb_code", direction = "vertical"}
+	this_gui_data.code_tb = elem
+		elem.style.vertically_stretchable = true
+		--elem.style.vertically_squashable = false
+		elem.style.width = 800
+		elem.style.minimal_height = 100
+		if global.combinators[entity_id].formatting and (indent_setting or colorize_setting) then
+			elem.text=format_code(global.combinators[entity_id].code, colorize_setting, indent_setting)
+		else
+			elem.text = global.combinators[entity_id].code
+		end
+		if global.combinators[entity_id].errors and global.combinators[entity_id].errors ~= "" then
+			local test = string.gsub(global.combinators[entity_id].errors,".+:(%d+):.+", "%1")
+			elem.text = insert_error_icon(elem.text,test)
+		else
+			elem.text = insert_error_icon(elem.text)
+		end
+		global.textboxes[gui.name] = elem.text
+		if not global.history[gui.name] then
+			global.history[gui.name] = {elem.text}
+			global.historystate[gui.name] = 1
+		end
+	elem = gui.main_table.add{type="scroll-pane",name="flow",direction="vertical"}
+		elem.style.maximal_height = 700
+	gui.main_table.left_table.add{type = "table", column_count=2, name = "under_text", direction = "vertical"}
+		gui.main_table.left_table.under_text.style.width=800
+	gui.main_table.left_table.under_text.add{type = "label", name = "errors", direction = "horizontal"}
+		gui.main_table.left_table.under_text.errors.style.width=760
+	elem =gui.main_table.left_table.under_text.add{type = "button", name = "luacomsb_ok_"..entity_id, direction = "horizontal",caption="ok"}
+	this_gui_data.ok_btn = elem
+		elem.style.width=35
+		elem.style.height=30
+		elem.style.top_padding=0
+		elem.style.left_padding=0
+	local i = global.historystate[gui.name]
+	if global.history[gui.name][i-1] then
+		gui.flow.luacomsb_back.sprite = "luacomsb_back_enabled"
+		gui.flow.luacomsb_back.ignored_by_interaction = false
+	else
+		gui.flow.luacomsb_back.sprite = "luacomsb_back"
+		gui.flow.luacomsb_back.ignored_by_interaction = true
+	end
+	if global.history[gui.name][i+1] then
+		gui.flow.luacomsb_forward.sprite = "luacomsb_forward_enabled"
+		gui.flow.luacomsb_forward.ignored_by_interaction = false
+	else
+		gui.flow.luacomsb_forward.sprite = "luacomsb_forward"
+		gui.flow.luacomsb_forward.ignored_by_interaction = true
+	end
+	return this_gui_data
+	-- global.guis[entity_id]=this_gui_data
+	-- player.opened=gui
+end
+
+
+function comb_gui_class:on_gui_click(comb_id, elname, preset_i, event)
+
+	local gui_t = global.guis[comb_id]
+	local gui = gui_t.gui
+	local indent_setting = settings_cache:get(gui.player_index, 'indent_code' )
+	local colorize_setting = settings_cache:get(gui.player_index, 'colorize_code' )
+	game.print('colorize_setting'..tostring(colorize_setting))
+
+	if elname == 'ok_btn' then
+		local code = gui_t.code_tb.text
+		load_code(code, comb_id)
+		if global.combinators[comb_id].errors and global.combinators[comb_id].errors ~= "" then
+			local test = string.gsub(global.combinators[comb_id].errors,".+:(%d+):.+", "%1")
+			gui_t.code_tb.text = insert_error_icon(code,test)
+		else
+			gui_t.code_tb.text = insert_error_icon(code)
+			combinator_tick(comb_id)
+		end
+	elseif elname == 'x_btn' then
+		gui.destroy()
+		global.guis[comb_id]=nil
+	elseif (event.element.name == "luacomsb_help") then
+		helper_gui(event.player_index)
+	elseif (event.element.name == "luacomsb_helper_x") then
+		event.element.parent.destroy()
+	elseif elname == 'preset_btn' then
+		local subgui = event.element.parent
+		assert( subgui.parent == gui )
+		local id = preset_i+1
+		if event.button == defines.mouse_button_type.left then
+			local code_textbox = gui_t.code_tb
+			if global.presets[id] then
+				if subgui.luacomsb_formatting.state then
+					code_textbox.text = format_code(global.presets[id], colorize_setting, indent_setting)
+				else
+					code_textbox.text = global.presets[id]
+				end
+				global.textboxes[gui.name] = code_textbox.text
+				if not global.history[gui.name] then
+					global.history[gui.name] = {code_textbox.text}
+					global.historystate[gui.name] = 1
+				else
+					insert_history(gui, code_textbox.text)
+				end
+			else
+				global.presets[id] = remove_colors(code_textbox.text)
+					event.element.style.font_color = {r=0,g=0,b=0}
+					event.element.style.hovered_font_color  = {r=0,g=0,b=0}
+				event.element.tooltip = global.presets[id]
+			end
+		elseif event.button == defines.mouse_button_type.right then
+			global.presets[id] = nil
+			event.element.style.font_color = {r=0.3,g=0.3,b=0.3}
+			event.element.style.hovered_font_color  = {r=0.3,g=0.3,b=0.3}
+			event.element.tooltip = ""
+		end
+	elseif elname == 'formatting_cb' then
+		if event.button == defines.mouse_button_type.left then
+			local code_tb = gui_t.code_tb
+			if event.element.state == true then
+				code_tb.text = format_code(code_tb.text, colorize_setting, indent_setting)
+				global.textboxes[gui_t.gui.name] = code_tb.text
+			else
+				code_tb.text = remove_colors(code_tb.text)
+			end
+			global.combinators[comb_id].formatting = event.element.state
+		end
+	elseif elname == 'bw_btn' then
+		if event.button == defines.mouse_button_type.left and event.shift then
+			self:history(gui, -50)
+		elseif event.button == defines.mouse_button_type.right then
+			self:history(gui, -5)
+		else
+			self:history(gui, -1)
+		end
+	elseif elname == 'fw_btn' then
+		if event.button == defines.mouse_button_type.left and event.shift then
+			self:history(gui, 50)
+		elseif event.button == defines.mouse_button_type.right then
+			self:history(gui, 5)
+		else
+			self:history(gui, 1)
+		end
+	end
+
+end
+
+function comb_gui_class:on_gui_text_changed(eid, ev)
+	local indent_setting = settings_cache:get(ev.player_index, 'indent_code' )
+	local colorize_setting = settings_cache:get(ev.player_index, 'colorize_code' )
+	if ev.element.name ~= "luacomsb_code" then return end
+
+	if not global.textboxes then
+		global.textboxes = {}
+	end
+	local gui = global.guis[eid].gui
+	if not gui.flow.luacomsb_formatting.state or(not indent_setting and not colorize_setting) then
+		if not global.history[gui.name] then
+			global.history[gui.name] = {ev.element.text}
+			global.historystate[gui.name] = 1
+		else
+			insert_history(gui, ev.element.text)
+		end
+		global.textboxes[gui.name] = ev.element.text
+		return
+	end
+	if not global.textboxes[gui.name] then
+		global.textboxes[gui.name] = ev.element.text
+		if not global.history[gui.name] then
+			global.history[gui.name] = {ev.element.text}
+			global.historystate[gui.name] = 1
+		end
+	else
+		local current = remove_colors(ev.element.text)
+		local cache = remove_colors(global.textboxes[gui.name])
+		local cursor, upd_col, upd_flow = find_difference(current,cache)
+		upd_col = upd_col and colorize_setting
+		upd_flow = upd_flow and indent_setting
+		if cursor then
+			if upd_col or upd_flow then
+				ev.element.text, cursor = format_code(current, colorize_setting, upd_flow, cursor)
+				ev.element.select(cursor,cursor-1)
+			end
+		end
+		if not global.history[gui.name] then
+			global.history[gui.name] = {ev.element.text}
+			global.historystate[gui.name] = 1
+		else
+			insert_history(gui, ev.element.text)
+		end
+		global.textboxes[gui.name] = ev.element.text
+	end
+
+end
+
+function comb_gui_class:history (gui,interval)
+	local indent_setting = settings_cache:get(gui.player_index, 'indent_code' )
+	local colorize_setting = settings_cache:get(gui.player_index, 'colorize_code' )
+	local gui_name = gui.name
+	local eid = find_eid_for_gui_element(gui)
+	local codebox = global.guis[eid].code_tb
+	local i = math.min(#global.history[gui_name],math.max(1,global.historystate[gui_name]+interval))
+	global.historystate[gui_name] = i
+	if gui.flow.luacomsb_formatting.state then
+		codebox.text = format_code(remove_colors(global.history[gui_name][i]), colorize_setting, indent_setting)
+	else
+		codebox.text = remove_colors(global.history[gui_name][i])
+	end
+	if global.history[gui_name][i-1] then
+		gui.flow.luacomsb_back.sprite = "luacomsb_back_enabled"
+		gui.flow.luacomsb_back.ignored_by_interaction = false
+	else
+		gui.flow.luacomsb_back.sprite = "luacomsb_back"
+		gui.flow.luacomsb_back.ignored_by_interaction = true
+	end
+	if global.history[gui_name][i+1] then
+		gui.flow.luacomsb_forward.sprite = "luacomsb_forward_enabled"
+		gui.flow.luacomsb_forward.ignored_by_interaction = false
+	else
+		gui.flow.luacomsb_forward.sprite = "luacomsb_forward"
+		gui.flow.luacomsb_forward.ignored_by_interaction = true
+	end
+	global.textboxes[gui_name] = codebox.text
+end
+
+
+
+function find_difference (current, cache)
 	if current == cache then return nil end
 	-- printt('-------------')
 	-- printt(current)
@@ -585,51 +931,7 @@ end
 
 
 script.on_event(defines.events.on_gui_text_changed, function(event)
-	local eid = find_eid_for_gui_element(event.element)
-	if not eid then return end
-	-- print('on_gui_text_changed')
-	local indent_setting = settings_cache:get(event.player_index, 'indent_code' )
-	local colorize_setting = settings_cache:get(event.player_index, 'colorize_code' )
-	if event.element.name == "luacomsb_code" then
-		if not global.textboxes then
-			global.textboxes = {}
-		end
-		local gui = global.guis[eid].gui
-		if not gui.flow.luacomsb_formatting.state or(not indent_setting and not colorize_setting) then
-			if not global.history[gui.name] then
-				global.history[gui.name] = {event.element.text}
-				global.historystate[gui.name] = 1
-			else
-				insert_history(gui, event.element.text)
-			end
-			global.textboxes[gui.name] = event.element.text
-			return
-		end
-		if not global.textboxes[gui.name] then
-			global.textboxes[gui.name] = event.element.text
-			if not global.history[gui.name] then
-				global.history[gui.name] = {event.element.text}
-				global.historystate[gui.name] = 1
-			end
-		else
-			local current = remove_colors(event.element.text)
-			local cache = remove_colors(global.textboxes[gui.name])
-			local cursor, upd_col, upd_flow = find_difference(current,cache)
-			if cursor then
-				if upd_col or upd_flow then
-					event.element.text, cursor = format_code(current, colorize_setting, upd_flow, cursor)
-					event.element.select(cursor,cursor-1)
-				end
-			end
-			if not global.history[gui.name] then
-				global.history[gui.name] = {event.element.text}
-				global.historystate[gui.name] = 1
-			else
-				insert_history(gui, event.element.text)
-			end
-			global.textboxes[gui.name] = event.element.text
-		end
-	end
+	gui_manager:on_gui_text_changed(event)
 end)
 
 function remove_colors(text)
@@ -642,9 +944,6 @@ function remove_colors(text)
 end
 
 function format_code(text, colorize, upd_flow, tracked_pos)
-	colorize = colorize or true
-	upd_flow = upd_flow or true
-
 	local cursor = tracked_pos
 	local tracking = true
 	if not tracked_pos then tracking = false end
@@ -845,33 +1144,6 @@ function insert_history(gui, code)
 	end
 end
 
-function history (gui,interval)
-	local gui_name = gui.name
-	local eid = find_eid_for_gui_element(gui)
-	local codebox = global.guis[eid].code_tb
-	local i = math.min(#global.history[gui_name],math.max(1,global.historystate[gui_name]+interval))
-	global.historystate[gui_name] = i
-	if gui.flow.luacomsb_formatting.state then
-		codebox.text = format_code(remove_colors(global.history[gui_name][i]))
-	else
-		codebox.text = remove_colors(global.history[gui_name][i])
-	end
-	if global.history[gui_name][i-1] then
-		gui.flow.luacomsb_back.sprite = "luacomsb_back_enabled"
-		gui.flow.luacomsb_back.ignored_by_interaction = false
-	else
-		gui.flow.luacomsb_back.sprite = "luacomsb_back"
-		gui.flow.luacomsb_back.ignored_by_interaction = true
-	end
-	if global.history[gui_name][i+1] then
-		gui.flow.luacomsb_forward.sprite = "luacomsb_forward_enabled"
-		gui.flow.luacomsb_forward.ignored_by_interaction = false
-	else
-		gui.flow.luacomsb_forward.sprite = "luacomsb_forward"
-		gui.flow.luacomsb_forward.ignored_by_interaction = true
-	end
-	global.textboxes[gui_name] = codebox.text
-end
 
 script.on_event(defines.events.on_gui_opened, function(event)
 	if not event.entity then return end
@@ -884,7 +1156,7 @@ script.on_event(defines.events.on_gui_opened, function(event)
 		-- 	player.gui.center["luacomsb_gui_"..ent.unit_number].destroy()
 		-- end
 		if not global.guis[eid] then
-			create_gui(player,ent)
+			gui_manager:open(player,ent)
 		else
 			local who_opened_id = global.guis[eid].gui.player_index
 			player.print(game.players[who_opened_id].name..' already opened this combinator', {1,1,0})
@@ -925,154 +1197,7 @@ end
  preset_btns
  ]]
 
-function create_gui(player, entity)
-	local entity_id = entity.unit_number
-	--global.combinators[entity.unit_number].formatting = global.combinators[entity.unit_number].formatting or  false
-	local this_gui_data = {}
-	local gui = player.gui.center.add{type = "frame", name = "luacomsb_gui_"..entity_id, caption = "", direction = "vertical"}
-	this_gui_data.gui = gui
-		gui.caption = "rednet[], greennet[], var[], output[], delay"
-		gui.style.top_padding 		= 1
-		gui.style.right_padding 	= 4
-		gui.style.bottom_padding 	= 4
-		gui.style.left_padding 		= 4
-		--gui.style.scaleable 		= false
-	gui.add{type = "flow", name = "flow", direction = "horizontal"}
-		gui.flow.style.width = 799
-	local elem = gui.flow.add{type = "sprite-button", name = "luacomsb_x_"..entity_id, direction = "horizontal"}
-	this_gui_data.x_btn = elem
-		elem.style.height=20
-		elem.style.width=20
-		elem.style.top_padding=0
-		elem.style.bottom_padding=0
-		elem.style.left_padding=0
-		elem.style.right_padding=0
-		--elem.style.disabled_font_color ={r=1,g=1,b=1}
-		elem.sprite="luacomsb_close"
-	elem = gui.flow.add{type = "sprite-button", name = "luacomsb_help", direction = "horizontal"}
-		elem.style.height=20
-		elem.style.width=20
-		elem.style.top_padding=0
-		elem.style.bottom_padding=0
-		elem.style.left_padding=0
-		elem.style.right_padding=0
-		elem.sprite="luacomsb_questionmark"
-	elem=gui.flow.add{type = "flow", name = "flow1", direction = "horizontal"}
-		elem.style.width=15
-	elem = gui.flow.add{type="sprite-button", name = "luacomsb_back", state = true}
-	this_gui_data.bw_btn = elem
-		elem.style.height=20
-		elem.style.width=20
-		elem.style.top_padding=0
-		elem.style.bottom_padding=0
-		elem.style.left_padding=0
-		elem.style.right_padding=0
-		elem.sprite="luacomsb_back"
-		elem.hovered_sprite ="luacomsb_back"
-		elem.clicked_sprite ="luacomsb_back"
-	elem = gui.flow.add{type="sprite-button", name = "luacomsb_forward", state = true}
-	this_gui_data.fw_btn = elem
-		elem.style.height=20
-		elem.style.width=20
-		elem.style.top_padding=0
-		elem.style.bottom_padding=0
-		elem.style.left_padding=0
-		elem.style.right_padding=0
-		elem.sprite="luacomsb_forward"
-		elem.hovered_sprite ="luacomsb_forward"
-		elem.clicked_sprite  ="luacomsb_forward"
-	elem = gui.flow.add{type="checkbox", name = "luacomsb_formatting", state = true}
-	this_gui_data.formatting_cb = elem
-		elem.tooltip="Toggle code formatting"
-		elem.style.height=18
-		elem.style.width=18
-		elem.state = global.combinators[entity_id].formatting
-	elem=gui.flow.add{type = "flow", name = "flow2", direction = "horizontal"}
-		--elem.style.width=95
-		elem.style.horizontally_stretchable = true
-	local preset_btns = {}
-	for i=0,20 do
-		elem = gui.flow.add{type = "button", name = "luacomsb_preset_"..i, direction = "horizontal",caption=i}
-		preset_btns[i] = elem
-			elem.style.height=20
-			elem.style.width=27
-			elem.style.top_padding=0
-			elem.style.bottom_padding=0
-			elem.style.left_padding=0
-			elem.style.right_padding=0
-		if not global.presets[i+1] then
-			elem.style.font_color = {r=0.3,g=0.3,b=0.3}
-			elem.style.hovered_font_color  = {r=0.3,g=0.3,b=0.3}
-		else
-			elem.tooltip = global.presets[i+1]
-		end
-	end
-	this_gui_data.preset_btns = preset_btns
-	elem = gui.add{type = "table", column_count=2, name = "main_table", direction = "vertical"}
-		elem.style.vertical_align = "top"
-	elem = gui.main_table.add{type = "flow", column_count=1, name = "left_table", direction = "vertical"}
-		elem.style.vertical_align = "top"
-		--elem.style.vertically_stretchable = true
-		--elem.style.vertically_squashable = false
-	elem = gui.main_table.left_table.add{type = "scroll-pane",  name = "code_scroll", direction = "vertical"}
-		--elem.style.vertically_stretchable = true
-		--elem.style.vertically_squashable = false
-		elem.style.maximal_height = 700
-	elem = gui.main_table.left_table.code_scroll.add{type = "table", column_count=1, name = "code_table", direction = "vertical"}
-		--elem.style.vertically_stretchable = true
-		--elem.style.vertically_squashable = false
-	elem = gui.main_table.left_table.code_scroll.code_table.add{type = "text-box", name = "luacomsb_code", direction = "vertical"}
-	this_gui_data.code_tb = elem
-		elem.style.vertically_stretchable = true
-		--elem.style.vertically_squashable = false
-		elem.style.width = 800
-		elem.style.minimal_height = 100
-		if global.combinators[entity_id].formatting then
-			elem.text=format_code(global.combinators[entity_id].code)
-		else
-			elem.text = global.combinators[entity_id].code
-		end
-		if global.combinators[entity_id].errors and global.combinators[entity_id].errors ~= "" then
-			local test = string.gsub(global.combinators[entity_id].errors,".+:(%d+):.+", "%1")
-			elem.text = insert_error_icon(elem.text,test)
-		else
-			elem.text = insert_error_icon(elem.text)
-		end
-		global.textboxes[gui.name] = elem.text
-		if not global.history[gui.name] then
-			global.history[gui.name] = {elem.text}
-			global.historystate[gui.name] = 1
-		end
-	elem = gui.main_table.add{type="scroll-pane",name="flow",direction="vertical"}
-		elem.style.maximal_height = 700
-	gui.main_table.left_table.add{type = "table", column_count=2, name = "under_text", direction = "vertical"}
-		gui.main_table.left_table.under_text.style.width=800
-	gui.main_table.left_table.under_text.add{type = "label", name = "errors", direction = "horizontal"}
-		gui.main_table.left_table.under_text.errors.style.width=760
-	elem =gui.main_table.left_table.under_text.add{type = "button", name = "luacomsb_ok_"..entity_id, direction = "horizontal",caption="ok"}
-	this_gui_data.ok_btn = elem
-		elem.style.width=35
-		elem.style.height=30
-		elem.style.top_padding=0
-		elem.style.left_padding=0
-	local i = global.historystate[gui.name]
-	if global.history[gui.name][i-1] then
-		gui.flow.luacomsb_back.sprite = "luacomsb_back_enabled"
-		gui.flow.luacomsb_back.ignored_by_interaction = false
-	else
-		gui.flow.luacomsb_back.sprite = "luacomsb_back"
-		gui.flow.luacomsb_back.ignored_by_interaction = true
-	end
-	if global.history[gui.name][i+1] then
-		gui.flow.luacomsb_forward.sprite = "luacomsb_forward_enabled"
-		gui.flow.luacomsb_forward.ignored_by_interaction = false
-	else
-		gui.flow.luacomsb_forward.sprite = "luacomsb_forward"
-		gui.flow.luacomsb_forward.ignored_by_interaction = true
-	end
-	global.guis[entity_id]=this_gui_data
-	player.opened=gui
-end
+
 
 function helper_gui(pl)
 	local player = game.players[pl]
@@ -1131,87 +1256,7 @@ function insert_error_icon(text, errorline)
 end
 
 script.on_event(defines.events.on_gui_click, function (event)
-	local comb_id, elname, preset_i = find_eid_for_gui_element(event.element)
-	if not comb_id then return end
-	local gui_t = global.guis[comb_id]
-	local gui = gui_t.gui
-
-	if elname == 'ok_btn' then
-		local code = gui_t.code_tb.text
-		load_code(code, comb_id)
-		if global.combinators[comb_id].errors and global.combinators[comb_id].errors ~= "" then
-			local test = string.gsub(global.combinators[comb_id].errors,".+:(%d+):.+", "%1")
-			gui_t.code_tb.text = insert_error_icon(code,test)
-		else
-			gui_t.code_tb.text = insert_error_icon(code)
-			combinator_tick(comb_id)
-		end
-	elseif elname == 'x_btn' then
-		gui.destroy()
-		global.guis[comb_id]=nil
-	elseif (event.element.name == "luacomsb_help") then
-		helper_gui(event.player_index)
-	elseif (event.element.name == "luacomsb_helper_x") then
-		event.element.parent.destroy()
-	elseif elname == 'preset_btn' then
-		local subgui = event.element.parent
-		assert( subgui.parent == gui )
-		local id = preset_i+1
-		if event.button == defines.mouse_button_type.left then
-			local code_textbox = gui_t.code_tb
-			if global.presets[id] then
-				if subgui.luacomsb_formatting.state then
-					code_textbox.text = format_code(global.presets[id])
-				else
-					code_textbox.text = global.presets[id]
-				end
-				global.textboxes[gui.name] = code_textbox.text
-				if not global.history[gui.name] then
-					global.history[gui.name] = {code_textbox.text}
-					global.historystate[gui.name] = 1
-				else
-					insert_history(gui, code_textbox.text)
-				end
-			else
-				global.presets[id] = remove_colors(code_textbox.text)
-					event.element.style.font_color = {r=0,g=0,b=0}
-					event.element.style.hovered_font_color  = {r=0,g=0,b=0}
-				event.element.tooltip = global.presets[id]
-			end
-		elseif event.button == defines.mouse_button_type.right then
-			global.presets[id] = nil
-			event.element.style.font_color = {r=0.3,g=0.3,b=0.3}
-			event.element.style.hovered_font_color  = {r=0.3,g=0.3,b=0.3}
-			event.element.tooltip = ""
-		end
-	elseif elname == 'formatting_cb' then
-		if event.button == defines.mouse_button_type.left then
-			local code_tb = gui_t.code_tb
-			if event.element.state == true then
-				code_tb.text = format_code(code_tb.text)
-				global.textboxes[gui_t.gui.name] = code_tb.text
-			else
-				code_tb.text = remove_colors(code_tb.text)
-			end
-			global.combinators[comb_id].formatting = event.element.state
-		end
-	elseif elname == 'bw_btn' then
-		if event.button == defines.mouse_button_type.left and event.shift then
-			history(gui, -50)
-		elseif event.button == defines.mouse_button_type.right then
-			history(gui, -5)
-		else
-			history(gui, -1)
-		end
-	elseif elname == 'fw_btn' then
-		if event.button == defines.mouse_button_type.left and event.shift then
-			history(gui, 50)
-		elseif event.button == defines.mouse_button_type.right then
-			history(gui, 5)
-		else
-			history(gui, 1)
-		end
-	end
+	gui_manager:on_gui_click(event)
 end)
 
 script.on_event({defines.events.on_gui_closed},function(event)
