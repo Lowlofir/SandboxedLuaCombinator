@@ -111,11 +111,18 @@ else
 end
 
 
---[[
 combinator2 = table.deepcopy(data.raw["arithmetic-combinator"]["arithmetic-combinator"])
 combinator2.name = "lua-combinator-sb-sep"
-combinator2.minable = {mining_time = 0.5, result = "lua-combinator-sb-sep"}
-]]
+combinator2.minable.result = "lua-combinator-sb-sep"
+combinator2.energy_source = { type = 'void' }
+combinator2.energy_usage_per_tick = '1W'
+
+local combinator2_item = table.deepcopy(data.raw['item']['arithmetic-combinator'])
+combinator2_item.name = combinator2.name
+combinator2_item.place_result = combinator2.name
+-- combinator2_item.icons = icons.of(combinator2)
+combinator2_item.subgroup = 'circuit-network'
+-- combinator2_item.order = 'c[combinators]-m[recipe-combinator]'
 
 
 data:extend({
@@ -134,31 +141,19 @@ data:extend({
     stack_size = 50
   },
   
-  -- combinator2,
-  -- {
-  --   type = "item",
-  --   name = "lua-combinator-sb-sep",
-  --   icon_size = 32,
-  --   icon = "__base__/graphics/icons/arithmetic-combinator.png",
-  --   flags = {flag_quickbar},
-  --   subgroup = "circuit-network",
-  --   order = "c[combinators]-c[arithmetic-combinator]",
-  --   place_result = "lua-combinator-sb-sep",
-  --   stack_size = 50
-  -- },
-
-  -- {		
-  --   type = "recipe",
-  --   name = "lua-combinator-sb-sep",
-  --   icon_size = 64,
-  --   enabled = "true",
-  --   ingredients =
-  --   {
-  --     {"arithmetic-combinator", 1},
-  --     {"advanced-circuit", 5}
-  --   },
-  --   result = "lua-combinator-sb-sep"
-  -- },
+  combinator2, combinator2_item,
+  {		
+    type = "recipe",
+    name = "lua-combinator-sb-sep",
+    icon_size = 64,
+    enabled = "true",
+    ingredients =
+    {
+      {"arithmetic-combinator", 1},
+      {"advanced-circuit", 5}
+    },
+    result = "lua-combinator-sb-sep"
+  },
 	
 	{
 		type = "recipe",
@@ -184,6 +179,10 @@ data:extend({
       {
         type = "unlock-recipe",
         recipe = "lua-combinator-sb"
+      },
+      {
+        type = "unlock-recipe",
+        recipe = "lua-combinator-sb-sep"
       }
     },
     prerequisites = {"circuit-network", "advanced-electronics"},
