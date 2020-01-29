@@ -140,7 +140,7 @@ local combinator2_item = table.deepcopy(data.raw['item']['arithmetic-combinator'
 combinator2_item.name = combinator2.name
 combinator2_item.place_result = combinator2.name
 combinator2_item.subgroup = 'circuit-network'
--- combinator2_item.order = 'c[combinators]-m[recipe-combinator]'
+combinator2_item.order = 'c[combinators]-db[lua-combinator-sb-sep]'
 
 
 data:extend({
@@ -154,7 +154,7 @@ data:extend({
     icon = "__SandboxedLuaCombinator__/graphics/lua-combinator-icon.png",
     flags = {flag_quickbar},
     subgroup = "circuit-network",
-    order = "c[combinators]-c[constant-combinator]",
+    order = "c[combinators]-da[lua-combinator-sb]",
     place_result = "lua-combinator-sb",
     stack_size = 50
   },

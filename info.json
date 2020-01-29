@@ -4,6 +4,6 @@
      "title": "Sandboxed LuaCombinator",
      "author": "IWTDU",
      "dependencies": ["base"],
-     "description": "Program combinators for what you need with lua.",
+     "description": "Program combinators with lua.",
      "factorio_version": "0.18"
    }
