@@ -9,7 +9,7 @@ sp = 	{
     
 
 local trans = {
-  filename = '__crafting_combinator__/graphics/trans.png',
+  filename = '__SandboxedLuaCombinator__/graphics/trans.png',
   width = 1,
   height = 1,
 }
