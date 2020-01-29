@@ -2,7 +2,7 @@
 Version: 0.3.3
 Date: 2020-01-29
   Features:
-    - Some game api parts made available. 
+    - Some game api elements made available. 
 
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.0
