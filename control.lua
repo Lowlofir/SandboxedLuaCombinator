@@ -190,7 +190,7 @@ end)
 
 local function on_destroyed(ev)
 	local entity = ev.entity or ev.ghost
-	game.print(entity.name..' : '..entity.type)
+	-- game.print(entity.name..' : '..entity.type)
 	if entity.name == 'lua-combinator-sb-sep' then
 		global.combinators[entity.unit_number].output_proxy.destroy()
 	elseif entity.name == 'entity-ghost' and (entity.ghost_name == "lua-combinator-sb" or entity.ghost_name == "lua-combinator-sb-sep") then

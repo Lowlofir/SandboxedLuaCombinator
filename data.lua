@@ -181,7 +181,6 @@ data:extend({
     ingredients =
     {
       {"constant-combinator", 1},
-      {"small-lamp", 1},
       {"advanced-circuit", 5}
     },
     result = "lua-combinator-sb"
