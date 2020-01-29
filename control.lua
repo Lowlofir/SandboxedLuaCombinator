@@ -4,6 +4,7 @@ local semver = require 'script.semver'
 utils = require 'script.utils'
 gui_manager = require 'script.gui'
 
+
 sandbox_env_std = {
   ipairs = ipairs,
   next = next,
@@ -12,19 +13,24 @@ sandbox_env_std = {
   tonumber = tonumber,
   tostring = tostring,
   type = type,
+  assert = assert,
+  error = error,
+  select = select ,
+  table_size = table_size,
+
   serpent = { block = serpent.block },
   string = { byte = string.byte, char = string.char, find = string.find,
       format = string.format, gmatch = string.gmatch, gsub = string.gsub,
       len = string.len, lower = string.lower, match = string.match,
       rep = string.rep, reverse = string.reverse, sub = string.sub,
       upper = string.upper },
-  table = { insert = table.insert, maxn = table.maxn, remove = table.remove,
+  table = { concat = table.concat, insert = table.insert, remove = table.remove,
       sort = table.sort, pack = table.pack, unpack = table.unpack, },
   math = { abs = math.abs, acos = math.acos, asin = math.asin,
       atan = math.atan, atan2 = math.atan2, ceil = math.ceil, cos = math.cos,
       cosh = math.cosh, deg = math.deg, exp = math.exp, floor = math.floor,
       fmod = math.fmod, frexp = math.frexp, huge = math.huge,
-      ldexp = math.ldexp, log = math.log, log10 = math.log10, max = math.max,
+      ldexp = math.ldexp, log = math.log, max = math.max,
       min = math.min, modf = math.modf, pi = math.pi, pow = math.pow,
       rad = math.rad, random = math.random, sin = math.sin, sinh = math.sinh,
       sqrt = math.sqrt, tan = math.tan, tanh = math.tanh },
@@ -223,6 +229,15 @@ function create_env(v)
 		__index = sandbox_env_std,
 	}
 	local ro_env = setmetatable({}, ro_meta)
+
+	if not sandbox_env_std.game then
+		sandbox_env_std.game = {
+			item_prototypes = game.item_prototypes,
+			recipe_prototypes = game.recipe_prototypes,
+			-- print = game.print,
+			tick = game.tick, -- just an initialization
+		}
+	end
 	ro_env.print = game.print
 
 	local var_meta = {
@@ -364,11 +379,7 @@ local function on_entity_settings_pasted(event)
 end
 
 local function on_tick(event)
-	-- print = game.print
-	-- printt = function (o)
-	-- 	return game.print(serpent.block(o))
-	-- end
-
+	
 	for unit_nr, gui_t in pairs(global.guis) do
 		local gui = gui_t.gui
 		if (not global.combinators[unit_nr]) or (not global.combinators[unit_nr].entity.valid) then
@@ -392,6 +403,10 @@ local function on_tick(event)
 			end
 			gui.main_table.left_table.under_text.errors.caption=(global.combinators[unit_nr].errors or "")..(global.combinators[unit_nr].errors2 or "")
 		end
+	end
+
+	if (sandbox_env_std.game) then
+		sandbox_env_std.game.tick = event.tick
 	end
 
 	for unit_nr, tbl in pairs(global.combinators) do
