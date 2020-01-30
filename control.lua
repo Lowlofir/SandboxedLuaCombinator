@@ -36,7 +36,7 @@ local sandbox_env_std = {
       sqrt = math.sqrt, tan = math.tan, tanh = math.tanh },
 }
 
-combinators_local = {}
+local combinators_local = {}
 function combinators_local.register(id)
 	combinators_local[id] = {}
 end
@@ -44,7 +44,7 @@ function combinators_local.unregister(id)
 	combinators_local[id] = nil
 end
 
-combinators_local_cbs = {}
+local combinators_local_cbs = {}
 
 
 settings_cache = {}
@@ -477,7 +477,7 @@ local function on_tick(event)
 end
 
 function combinator_tick(unit_nr, tick)
-	
+	tick = tick or game.tick
 	local tbl = global.combinators[unit_nr]
 
 	local output = tbl.output
