@@ -5,7 +5,7 @@ utils = require 'script.utils'
 gui_manager = require 'script.gui'
 
 
-sandbox_env_std = {
+local sandbox_env_std = {
   ipairs = ipairs,
   next = next,
   pairs = pairs,
@@ -196,9 +196,21 @@ end)
 
 local function on_destroyed(ev)
 	local entity = ev.entity or ev.ghost
+	local unit_nr = entity.unit_number
 	-- game.print(entity.name..' : '..entity.type)
 	if entity.name == 'lua-combinator-sb-sep' then
-		global.combinators[entity.unit_number].output_proxy.destroy()
+		global.combinators[unit_nr].output_proxy.destroy()
+		if global.combinators[unit_nr].blueprint_data and global.combinators[unit_nr].blueprint_data.valid then
+			global.combinators[unit_nr].blueprint_data.destroy()
+		end
+		global.combinators[unit_nr]=nil
+		combinators_local.unregister(unit_nr)
+	elseif entity.name == 'lua-combinator-sb' then
+		if global.combinators[unit_nr].blueprint_data and global.combinators[unit_nr].blueprint_data.valid then
+			global.combinators[unit_nr].blueprint_data.destroy()
+		end
+		global.combinators[unit_nr]=nil
+		combinators_local.unregister(unit_nr)
 	elseif entity.name == 'entity-ghost' and (entity.ghost_name == "lua-combinator-sb" or entity.ghost_name == "lua-combinator-sb-sep") then
 		local spot= entity.surface.find_entities_filtered{name="entity-ghost", ghost_name="luacomsb_blueprint_data", area= {{entity.position.x-0.1,entity.position.y-0.1},{entity.position.x+0.1,entity.position.y+0.1}}}
 		if #spot > 0 then
@@ -378,8 +390,33 @@ local function on_entity_settings_pasted(event)
 	end
 end
 
+local prof
+local prof_cnt
+
+local function perf_start()
+	if prof_cnt%60<=0.1 and prof_cnt>0 then
+		prof.divide(prof_cnt)
+		game.print(prof)
+		prof.reset()
+		prof_cnt = 0
+	else
+		prof.restart()
+	end
+
+end
+
+local function perf_stop()
+	prof.stop()
+	prof_cnt = prof_cnt + 1
+end
+
+
 local function on_tick(event)
-	
+	if not prof then 
+		prof = game.create_profiler()
+		prof_cnt = 0
+	end
+
 	for unit_nr, gui_t in pairs(global.guis) do
 		local gui = gui_t.gui
 		if (not global.combinators[unit_nr]) or (not global.combinators[unit_nr].entity.valid) then
@@ -405,12 +442,15 @@ local function on_tick(event)
 		end
 	end
 
+
 	if (sandbox_env_std.game) then
 		sandbox_env_std.game.tick = event.tick
 	end
 
+
 	for unit_nr, tbl in pairs(global.combinators) do
 		if not tbl.entity or not tbl.entity.valid then
+			game.print('not tbl.entity or not tbl.entity.valid')
 			if global.combinators[unit_nr].blueprint_data and global.combinators[unit_nr].blueprint_data.valid then
 				global.combinators[unit_nr].blueprint_data.destroy()
 			end
@@ -428,7 +468,7 @@ local function on_tick(event)
 					global.combinators[unit_nr].errors = global.combinators[unit_nr].errors or ""
 				end
 				if combinators_local[unit_nr].func then
-					combinator_tick(unit_nr)
+					combinator_tick(unit_nr, event.tick)
 				end
 			end
 		end
@@ -436,8 +476,8 @@ local function on_tick(event)
 
 end
 
-function combinator_tick(unit_nr)
-	local tick = game.tick
+function combinator_tick(unit_nr, tick)
+	
 	local tbl = global.combinators[unit_nr]
 
 	local output = tbl.output
