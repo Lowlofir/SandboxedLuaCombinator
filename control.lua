@@ -83,6 +83,7 @@ script.on_event(defines.events.on_runtime_mod_setting_changed, on_runtime_mod_se
 
 script.on_init( function ()
 	global.combinators = {}
+	global.outputs = {}
 	global.guis = {}
 	global.signals = {}
 	for name, _ in pairs(game.virtual_signal_prototypes) do
@@ -179,6 +180,9 @@ script.on_configuration_changed(function(changes)
 	if not global.textboxes then
 		global.textboxes = {}
 	end
+	if not global.outputs then
+		global.outputs = {}
+	end
 
 	-- game.print(serpent.block(changes))
 	migrate_if_required(changes.mod_changes)
@@ -195,27 +199,62 @@ script.on_load( function ()
 	end
 end)
 
+
+local function assign_output(comb_eid, output_ent)
+	global.combinators[comb_eid].additional_output_entities = global.combinators[comb_eid].additional_output_entities or {}
+	table.insert(global.combinators[comb_eid].additional_output_entities, output_ent)
+	global.outputs[output_ent.unit_number] = comb_eid
+	game.print(output_ent.unit_number..' assigned to '..comb_eid)
+end
+
+local function unassign_output(comb_eid, output_ent)
+	local pos
+	for k,v in pairs(global.combinators[comb_eid].additional_output_entities) do
+		if v == output_ent then
+			pos = k
+			break
+		end
+	end
+	assert(pos)
+	table.remove(global.combinators[comb_eid].additional_output_entities, pos)
+	global.outputs[output_ent.unit_number] = nil
+	game.print(output_ent.unit_number..' unassigned from '..comb_eid)
+end
+
+local function on_combinator_destroyed(unit_nr)
+	local tbl = global.combinators[unit_nr]
+	if tbl.output_proxy and tbl.output_proxy.valid then
+		tbl.output_proxy.destroy()
+	end
+	if tbl.blueprint_data and tbl.blueprint_data.valid then
+		tbl.blueprint_data.destroy()
+	end
+	if tbl.additional_output_entities then
+		for k,v in pairs(tbl.additional_output_entities) do
+			global.outputs[v.unit_number] = nil
+			v.surface.create_entity{name="flying-text", position=v.position, text="Unassigned", color={r=1,g=1,b=0.2}}
+		end
+	end
+	global.combinators[unit_nr]=nil
+	combinators_local.unregister(unit_nr)
+end
+
 local function on_destroyed(ev)
 	local entity = ev.entity or ev.ghost
 	local unit_nr = entity.unit_number
 	-- game.print(entity.name..' : '..entity.type)
 	if entity.name == 'lua-combinator-sb-sep' then
-		global.combinators[unit_nr].output_proxy.destroy()
-		if global.combinators[unit_nr].blueprint_data and global.combinators[unit_nr].blueprint_data.valid then
-			global.combinators[unit_nr].blueprint_data.destroy()
-		end
-		global.combinators[unit_nr]=nil
-		combinators_local.unregister(unit_nr)
+		on_combinator_destroyed(unit_nr)
 	elseif entity.name == 'lua-combinator-sb' then
-		if global.combinators[unit_nr].blueprint_data and global.combinators[unit_nr].blueprint_data.valid then
-			global.combinators[unit_nr].blueprint_data.destroy()
-		end
-		global.combinators[unit_nr]=nil
-		combinators_local.unregister(unit_nr)
+		on_combinator_destroyed(unit_nr)
 	elseif entity.name == 'entity-ghost' and (entity.ghost_name == "lua-combinator-sb" or entity.ghost_name == "lua-combinator-sb-sep") then
 		local spot= entity.surface.find_entities_filtered{name="entity-ghost", ghost_name="luacomsb_blueprint_data", area= {{entity.position.x-0.1,entity.position.y-0.1},{entity.position.x+0.1,entity.position.y+0.1}}}
 		if #spot > 0 then
 			spot[1].destroy()
+		end
+	elseif entity.name == 'lua-combinator-sb-output' then
+		if global.outputs[unit_nr] then
+			unassign_output(global.outputs[unit_nr], entity)
 		end
 	end
 end
@@ -288,55 +327,45 @@ function load_code(code,id)
 	end
 end
 
+
+local function make_output_proxy(comb_entity)
+	local output_proxy = comb_entity.surface.create_entity {
+		name = 'lua-combinator-sb-proxy',
+		position = comb_entity.position,
+		force = comb_entity.force,
+		create_build_effect_smoke = false
+	}
+	comb_entity.connect_neighbour {
+		wire = defines.wire_type.red,
+		target_entity = output_proxy,
+		source_circuit_id = defines.circuit_connector_id.combinator_output,
+	}
+	comb_entity.connect_neighbour {
+		wire = defines.wire_type.green,
+		target_entity = output_proxy,
+		source_circuit_id = defines.circuit_connector_id.combinator_output,
+	}
+	output_proxy.destructible = false
+	return output_proxy
+end
+
 local function on_built_entity(event)
 	if not event.created_entity.valid then return end
-	if event.created_entity.name == "lua-combinator-sb" then
-		local unit_id = event.created_entity.unit_number
-		combinators_local.register(unit_id)
-		global.combinators[unit_id] = {formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, usegreen = false, usered = false}
-		local blueprint_data = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
-		if blueprint_data[1] then
-			global.combinators[unit_id].code=read_from_combinator(blueprint_data[1])
-			combinators_local[unit_id].func,global.combinators[unit_id].errors = load_combinator_code(unit_id)
-			if not global.combinators[unit_id].errors then
-				global.combinators[unit_id].errors = ""
-			end
-			local _, countred = string.gsub(global.combinators[unit_id].code, "rednet", "")
-			local _, countgreen = string.gsub(global.combinators[unit_id].code, "greennet", "")
-			global.combinators[unit_id].usered = (countred > 0)
-			global.combinators[unit_id].usegreen = (countgreen > 0)
-			blueprint_data[1].destroy()
-		end
-		global.combinators[unit_id].blueprint_data = event.created_entity.surface.create_entity{name = "luacomsb_blueprint_data", position = event.created_entity.position, force = event.created_entity.force}
-		global.combinators[unit_id].blueprint_data.destructible = false
-		global.combinators[unit_id].blueprint_data.minable = false
-		write_to_combinator(global.combinators[unit_id].blueprint_data,global.combinators[unit_id].code)
-	elseif event.created_entity.name == "lua-combinator-sb-sep" then
-		local unit_id = event.created_entity.unit_number
+
+	local new_ent = event.created_entity
+
+	if new_ent.name == "lua-combinator-sb" or new_ent.name == "lua-combinator-sb-sep"then
+		local unit_id = new_ent.unit_number
 		combinators_local.register(unit_id)
 
-		local output_proxy = event.created_entity.surface.create_entity {
-			name = 'lua-combinator-sb-proxy',
-			position = event.created_entity.position,
-			force = event.created_entity.force,
-			create_build_effect_smoke = false
-		}
-		event.created_entity.connect_neighbour {
-			wire = defines.wire_type.red,
-			target_entity = output_proxy,
-			source_circuit_id = defines.circuit_connector_id.combinator_output,
-		}
-		event.created_entity.connect_neighbour {
-			wire = defines.wire_type.green,
-			target_entity = output_proxy,
-			source_circuit_id = defines.circuit_connector_id.combinator_output,
-		}
-	
-		output_proxy.destructible = false
-		global.combinators[unit_id] = {sep = true, output_proxy=output_proxy, formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, usegreen = false, usered = false}
-	
-	
-		local blueprint_data = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
+		global.combinators[unit_id] = {formatting = true, entity = new_ent, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, usegreen = false, usered = false}
+		if new_ent.name == "lua-combinator-sb-sep" then
+			local output_proxy = make_output_proxy(new_ent)
+			global.combinators[unit_id].output_proxy = output_proxy
+			global.combinators[unit_id].sep = true
+		end
+
+		local blueprint_data = new_ent.surface.find_entities_filtered{position = new_ent.position, ghost_name = "luacomsb_blueprint_data"}
 		if blueprint_data[1] then
 			global.combinators[unit_id].code=read_from_combinator(blueprint_data[1])
 			combinators_local[unit_id].func,global.combinators[unit_id].errors = load_combinator_code(unit_id)
@@ -349,18 +378,30 @@ local function on_built_entity(event)
 			global.combinators[unit_id].usegreen = (countgreen > 0)
 			blueprint_data[1].destroy()
 		end
-		global.combinators[unit_id].blueprint_data = event.created_entity.surface.create_entity{name = "luacomsb_blueprint_data", position = event.created_entity.position, force = event.created_entity.force}
+		global.combinators[unit_id].blueprint_data = new_ent.surface.create_entity{name = "luacomsb_blueprint_data", position = new_ent.position, force = new_ent.force}
 		global.combinators[unit_id].blueprint_data.destructible = false
 		global.combinators[unit_id].blueprint_data.minable = false
 		write_to_combinator(global.combinators[unit_id].blueprint_data,global.combinators[unit_id].code)
-	elseif event.created_entity.name == "lua-combinator-sb-output" then
-		event.created_entity.operable = false
-		local luacombs = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, radius = 1, name = {'lua-combinator-sb', 'lua-combinator-sb-sep'}}
-		if luacombs[1] and global.combinators[luacombs[1].unit_number] then
+
+		local outputs = new_ent.surface.find_entities_filtered{position = new_ent.position, radius = 1.2, name = 'lua-combinator-sb-output'}
+		for k,v in pairs(outputs) do
+			if global.outputs[v.unit_number] then
+				new_ent.surface.create_entity{name="flying-text", position=v.position, text="Already assigned", color={r=1,g=1,b=0.2}}
+			else
+				assign_output(unit_id, v)
+				new_ent.surface.create_entity{name="flying-text", position=v.position, text="Assigned", color={r=0.2,g=1,b=0.2}}
+			end
+		end
+
+	elseif new_ent.name == "lua-combinator-sb-output" then
+		new_ent.operable = false
+		local luacombs = new_ent.surface.find_entities_filtered{position = new_ent.position, radius = 1.2, name = {'lua-combinator-sb', 'lua-combinator-sb-sep'}}
+		if #luacombs > 1 then
+			new_ent.surface.create_entity{name="flying-text", position=new_ent.position, text="Ambiguous position", color={r=1,g=0.2,b=0.2}}
+		elseif luacombs[1] and global.combinators[luacombs[1].unit_number] then
 			local cid = luacombs[1].unit_number
-			global.combinators[cid].additional_output_entities = global.combinators[cid].additional_output_entities or {}
-			table.insert(global.combinators[cid].additional_output_entities, event.created_entity)
-			game.print(event.created_entity.unit_number..' assigned to '..cid)
+			assign_output(cid, new_ent)
+			new_ent.surface.create_entity{name="flying-text", position=luacombs[1].position, text="Assigned", color={r=0.2,g=1,b=0.2}}
 		end 
 	end
 end
