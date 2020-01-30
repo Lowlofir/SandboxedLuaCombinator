@@ -84,6 +84,7 @@ script.on_event(defines.events.on_runtime_mod_setting_changed, on_runtime_mod_se
 script.on_init( function ()
 	global.combinators = {}
 	global.outputs = {}
+	global.inputs = {}
 	global.guis = {}
 	global.signals = {}
 	for name, _ in pairs(game.virtual_signal_prototypes) do
@@ -151,6 +152,7 @@ local function reenable_recipes()
 			force.recipes['lua-combinator-sb'].enabled = true
 			force.recipes['lua-combinator-sb-sep'].enabled = true
 			force.recipes['lua-combinator-sb-output'].enabled = true
+			force.recipes['lua-combinator-sb-input'].enabled = true
 		end
 	end
 end
@@ -183,7 +185,9 @@ script.on_configuration_changed(function(changes)
 	if not global.outputs then
 		global.outputs = {}
 	end
-
+	if not global.inputs then
+		global.inputs = {}
+	end
 	-- game.print(serpent.block(changes))
 	migrate_if_required(changes.mod_changes)
 	reenable_recipes()
@@ -199,27 +203,61 @@ script.on_load( function ()
 	end
 end)
 
+local function find_in_list(l, val)
+	local pos
+	for k,v in pairs(l) do
+		if v == val then
+			pos = k
+			break
+		end
+	end
+	return pos
+end
 
-local function assign_output(comb_eid, output_ent)
+local outputs_registry = {}
+
+function outputs_registry.assign(comb_eid, output_ent)
 	global.combinators[comb_eid].additional_output_entities = global.combinators[comb_eid].additional_output_entities or {}
 	table.insert(global.combinators[comb_eid].additional_output_entities, output_ent)
 	global.outputs[output_ent.unit_number] = comb_eid
 	game.print(output_ent.unit_number..' assigned to '..comb_eid)
 end
 
-local function unassign_output(comb_eid, output_ent)
-	local pos
-	for k,v in pairs(global.combinators[comb_eid].additional_output_entities) do
-		if v == output_ent then
-			pos = k
-			break
-		end
-	end
+function outputs_registry.unassign(comb_eid, output_ent)
+	local pos = find_in_list(global.combinators[comb_eid].additional_output_entities, output_ent)
 	assert(pos)
 	table.remove(global.combinators[comb_eid].additional_output_entities, pos)
 	global.outputs[output_ent.unit_number] = nil
 	game.print(output_ent.unit_number..' unassigned from '..comb_eid)
 end
+
+function outputs_registry.get_assignation(output_ent_id)
+	return global.outputs[output_ent_id]
+end
+
+
+local inputs_registry = {}
+
+function inputs_registry.assign(comb_eid, input_ent)
+	global.combinators[comb_eid].additional_input_entities = global.combinators[comb_eid].additional_input_entities or {}
+	table.insert(global.combinators[comb_eid].additional_input_entities, input_ent)
+	global.inputs[input_ent.unit_number] = comb_eid
+	game.print(input_ent.unit_number..' assigned to '..comb_eid)
+end
+
+function inputs_registry.unassign(comb_eid, input_ent)
+	local pos = find_in_list(global.combinators[comb_eid].additional_input_entities, input_ent)
+	assert(pos)
+	table.remove(global.combinators[comb_eid].additional_input_entities, pos)
+	global.inputs[input_ent.unit_number] = nil
+	game.print(input_ent.unit_number..' unassigned from '..comb_eid)
+end
+
+function inputs_registry.get_assignation(input_ent_id)
+	return global.inputs[input_ent_id]
+end
+
+
 
 local function on_combinator_destroyed(unit_nr)
 	local tbl = global.combinators[unit_nr]
@@ -235,6 +273,13 @@ local function on_combinator_destroyed(unit_nr)
 			v.surface.create_entity{name="flying-text", position=v.position, text="Unassigned", color={r=1,g=1,b=0.2}}
 		end
 	end
+	if tbl.additional_input_entities then
+		for k,v in pairs(tbl.additional_input_entities) do
+			global.inputs[v.unit_number] = nil
+			v.surface.create_entity{name="flying-text", position=v.position, text="Unassigned", color={r=1,g=1,b=0.2}}
+		end
+	end
+
 	global.combinators[unit_nr]=nil
 	combinators_local.unregister(unit_nr)
 end
@@ -243,9 +288,7 @@ local function on_destroyed(ev)
 	local entity = ev.entity or ev.ghost
 	local unit_nr = entity.unit_number
 	-- game.print(entity.name..' : '..entity.type)
-	if entity.name == 'lua-combinator-sb-sep' then
-		on_combinator_destroyed(unit_nr)
-	elseif entity.name == 'lua-combinator-sb' then
+	if entity.name == 'lua-combinator-sb-sep' or entity.name == 'lua-combinator-sb' then
 		on_combinator_destroyed(unit_nr)
 	elseif entity.name == 'entity-ghost' and (entity.ghost_name == "lua-combinator-sb" or entity.ghost_name == "lua-combinator-sb-sep") then
 		local spot= entity.surface.find_entities_filtered{name="entity-ghost", ghost_name="luacomsb_blueprint_data", area= {{entity.position.x-0.1,entity.position.y-0.1},{entity.position.x+0.1,entity.position.y+0.1}}}
@@ -253,8 +296,14 @@ local function on_destroyed(ev)
 			spot[1].destroy()
 		end
 	elseif entity.name == 'lua-combinator-sb-output' then
-		if global.outputs[unit_nr] then
-			unassign_output(global.outputs[unit_nr], entity)
+		local asstion = outputs_registry.get_assignation(unit_nr)
+		if asstion then
+			outputs_registry.unassign(asstion, entity)
+		end
+	elseif entity.name == 'lua-combinator-sb-input' then
+		local asstion = inputs_registry.get_assignation(unit_nr)
+		if asstion then
+			inputs_registry.unassign(asstion, entity)
 		end
 	end
 end
@@ -393,14 +442,18 @@ local function on_built_entity(event)
 			end
 		end
 
-	elseif new_ent.name == "lua-combinator-sb-output" then
+	elseif new_ent.name == "lua-combinator-sb-output" or new_ent.name == "lua-combinator-sb-input" then
 		new_ent.operable = false
 		local luacombs = new_ent.surface.find_entities_filtered{position = new_ent.position, radius = 1.2, name = {'lua-combinator-sb', 'lua-combinator-sb-sep'}}
 		if #luacombs > 1 then
 			new_ent.surface.create_entity{name="flying-text", position=new_ent.position, text="Ambiguous position", color={r=1,g=0.2,b=0.2}}
 		elseif luacombs[1] and global.combinators[luacombs[1].unit_number] then
 			local cid = luacombs[1].unit_number
-			assign_output(cid, new_ent)
+			if new_ent.name == "lua-combinator-sb-output" then
+				assign_output(cid, new_ent)
+			else
+				assign_input(cid, new_ent)
+			end
 			new_ent.surface.create_entity{name="flying-text", position=luacombs[1].position, text="Assigned", color={r=0.2,g=1,b=0.2}}
 		end 
 	end

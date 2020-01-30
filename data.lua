@@ -147,6 +147,20 @@ combinator_output_item.subgroup = 'circuit-network'
 combinator_output_item.order = 'c[combinators]-dc[lua-combinator-sb-output]'
 
 
+combinator_input = table.deepcopy(data.raw["lamp"]["small-lamp"])
+combinator_input.name = "lua-combinator-sb-input"
+combinator_input.minable = {mining_time = 0.5, result = "lua-combinator-sb-input"}
+combinator_input.energy_source = { type = 'void' }
+combinator_input.energy_usage_per_tick = '1W'
+
+
+combinator_input_item = table.deepcopy(data.raw["item"]["small-lamp"])
+combinator_input_item.name = combinator_input.name
+combinator_input_item.place_result = combinator_input.name
+combinator_input_item.subgroup = 'circuit-network'
+combinator_input_item.order = 'c[combinators]-dd[lua-combinator-sb-input]'
+
+
 data:extend({
   combinator,
   blueprint_data,
@@ -184,7 +198,8 @@ data:extend({
     draw_circuit_wires = false,
   },
 
-  combinator_output, combinator_output_item
+  combinator_output, combinator_output_item,
+  combinator_input, combinator_input_item
 })
 
 require 'prototypes.recipes'

@@ -24,6 +24,14 @@ data:extend({
           {
             type = "unlock-recipe",
             recipe = "lua-combinator-sb-sep"
+          },
+          {
+            type = "unlock-recipe",
+            recipe = "lua-combinator-sb-output"
+          },
+          {
+            type = "unlock-recipe",
+            recipe = "lua-combinator-sb-input"
           }
         },
         prerequisites = {"circuit-network", "advanced-electronics"},
