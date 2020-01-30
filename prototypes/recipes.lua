@@ -24,6 +24,20 @@ data:extend({
           {"advanced-circuit", 5}
         },
         result = "lua-combinator-sb"
+      },
+
+      {
+        type = "recipe",
+        name = "lua-combinator-sb-output",
+        icon_size = 64,
+        enabled = "false",
+        ingredients =
+        {
+          {"constant-combinator", 1},
+          {"processing-unit", 1}
+        },
+        result = "lua-combinator-sb-output"
       }
+
     
 })

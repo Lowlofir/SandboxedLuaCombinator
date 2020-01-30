@@ -149,6 +149,7 @@ local function reenable_recipes()
 		if force.technologies['lua-combinator-sb'].researched then
 			force.recipes['lua-combinator-sb'].enabled = true
 			force.recipes['lua-combinator-sb-sep'].enabled = true
+			force.recipes['lua-combinator-sb-output'].enabled = true
 		end
 	end
 end

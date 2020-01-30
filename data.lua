@@ -1,12 +1,3 @@
-sp = 	{
-        "automation-science-pack",
-        "logistic-science-pack", 
-        "chemical-science-pack", 
-        "military-science-pack", 
-        "production-science-pack",
-        "utility-science-pack"
-    }
-    
 
 local trans = {
   filename = '__SandboxedLuaCombinator__/graphics/trans.png',
@@ -143,6 +134,19 @@ combinator2_item.subgroup = 'circuit-network'
 combinator2_item.order = 'c[combinators]-db[lua-combinator-sb-sep]'
 
 
+
+combinator_output = table.deepcopy(data.raw["constant-combinator"]["constant-combinator"])
+combinator_output.name = "lua-combinator-sb-output"
+combinator_output.item_slot_count = 500
+combinator_output.minable = {mining_time = 0.5, result = "lua-combinator-sb-output"}
+
+combinator_output_item = table.deepcopy(data.raw["item"]["constant-combinator"])
+combinator_output_item.name = combinator_output.name
+combinator_output_item.place_result = combinator_output.name
+combinator_output_item.subgroup = 'circuit-network'
+combinator_output_item.order = 'c[combinators]-dc[lua-combinator-sb-output]'
+
+
 data:extend({
   combinator,
   blueprint_data,
@@ -180,45 +184,10 @@ data:extend({
     draw_circuit_wires = false,
   },
 
-  {
-    type = "technology",
-    name = "lua-combinator-sb",
-    icon_size = 144,
-    icon = "__SandboxedLuaCombinator__/not-a-thumbnail.png",
-    effects =
-    {
-      {
-        type = "unlock-recipe",
-        recipe = "lua-combinator-sb"
-      },
-      {
-        type = "unlock-recipe",
-        recipe = "lua-combinator-sb-sep"
-      }
-    },
-    prerequisites = {"circuit-network", "advanced-electronics"},
-    unit =
-    {
-      count = 100,
-      ingredients =
-      {
-        {sp[1], 1},
-        {sp[2], 1}
-      },
-      time = 15
-    },
-    order = "a-d-d-z",
-  },
-  {
-    type = "virtual-signal",
-    name = "luacomsb_error",
-    special_signal = false,
-    icon = "__SandboxedLuaCombinator__/graphics/error-icon.png",
-    icon_size = 64,
-    subgroup = "virtual-signal-special",
-    order = "a[special]-[1everything]"
-  },
+  combinator_output, combinator_output_item
 })
 
 require 'prototypes.recipes'
 require 'prototypes.sprites'
+require 'prototypes.technology'
+require 'prototypes.signals'
