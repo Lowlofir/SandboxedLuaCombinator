@@ -437,10 +437,21 @@ local function on_built_entity(event)
 			if global.outputs[v.unit_number] then
 				new_ent.surface.create_entity{name="flying-text", position=v.position, text="Already assigned", color={r=1,g=1,b=0.2}}
 			else
-				assign_output(unit_id, v)
+				outputs_registry.assign(unit_id, v)
 				new_ent.surface.create_entity{name="flying-text", position=v.position, text="Assigned", color={r=0.2,g=1,b=0.2}}
 			end
 		end
+
+		local inputs = new_ent.surface.find_entities_filtered{position = new_ent.position, radius = 1.2, name = 'lua-combinator-sb-input'}
+		for k,v in pairs(inputs) do
+			if global.inputs[v.unit_number] then
+				new_ent.surface.create_entity{name="flying-text", position=v.position, text="Already assigned", color={r=1,g=1,b=0.2}}
+			else
+				inputs_registry.assign(unit_id, v)
+				new_ent.surface.create_entity{name="flying-text", position=v.position, text="Assigned", color={r=0.2,g=1,b=0.2}}
+			end
+		end
+
 
 	elseif new_ent.name == "lua-combinator-sb-output" or new_ent.name == "lua-combinator-sb-input" then
 		new_ent.operable = false
@@ -450,9 +461,9 @@ local function on_built_entity(event)
 		elseif luacombs[1] and global.combinators[luacombs[1].unit_number] then
 			local cid = luacombs[1].unit_number
 			if new_ent.name == "lua-combinator-sb-output" then
-				assign_output(cid, new_ent)
+				outputs_registry.assign(cid, new_ent)
 			else
-				assign_input(cid, new_ent)
+				inputs_registry.assign(cid, new_ent)
 			end
 			new_ent.surface.create_entity{name="flying-text", position=luacombs[1].position, text="Assigned", color={r=0.2,g=1,b=0.2}}
 		end 
