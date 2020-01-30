@@ -24,6 +24,17 @@ local m2 = {
 }
 table.insert(M, m2)
 
+table.insert(M, {
+    version = '0.3.4',
+    apply = function ()
+        for id,tbl in pairs(global.combinators) do
+            tbl.outputs = { [1]=tbl.output }
+            tbl.output = nil
+        end
+    end
+})
+
+
 
 
 return M

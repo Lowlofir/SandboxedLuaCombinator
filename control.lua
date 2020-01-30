@@ -289,10 +289,11 @@ function load_code(code,id)
 end
 
 local function on_built_entity(event)
-	if event.created_entity.valid and event.created_entity.name == "lua-combinator-sb" then
+	if not event.created_entity.valid then return end
+	if event.created_entity.name == "lua-combinator-sb" then
 		local unit_id = event.created_entity.unit_number
 		combinators_local.register(unit_id)
-		global.combinators[unit_id] = {formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", output={}, next_tick=1, usegreen = false, usered = false}
+		global.combinators[unit_id] = {formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, usegreen = false, usered = false}
 		local blueprint_data = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
 		if blueprint_data[1] then
 			global.combinators[unit_id].code=read_from_combinator(blueprint_data[1])
@@ -310,7 +311,7 @@ local function on_built_entity(event)
 		global.combinators[unit_id].blueprint_data.destructible = false
 		global.combinators[unit_id].blueprint_data.minable = false
 		write_to_combinator(global.combinators[unit_id].blueprint_data,global.combinators[unit_id].code)
-	elseif event.created_entity.valid and event.created_entity.name == "lua-combinator-sb-sep" then
+	elseif event.created_entity.name == "lua-combinator-sb-sep" then
 		local unit_id = event.created_entity.unit_number
 		combinators_local.register(unit_id)
 
@@ -332,7 +333,7 @@ local function on_built_entity(event)
 		}
 	
 		output_proxy.destructible = false
-		global.combinators[unit_id] = {sep = true, output_proxy=output_proxy, formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", output={}, next_tick=1, usegreen = false, usered = false}
+		global.combinators[unit_id] = {sep = true, output_proxy=output_proxy, formatting = true, entity = event.created_entity, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, usegreen = false, usered = false}
 	
 	
 		local blueprint_data = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, ghost_name = "luacomsb_blueprint_data"}
@@ -352,7 +353,15 @@ local function on_built_entity(event)
 		global.combinators[unit_id].blueprint_data.destructible = false
 		global.combinators[unit_id].blueprint_data.minable = false
 		write_to_combinator(global.combinators[unit_id].blueprint_data,global.combinators[unit_id].code)
-
+	elseif event.created_entity.name == "lua-combinator-sb-output" then
+		event.created_entity.operable = false
+		local luacombs = event.created_entity.surface.find_entities_filtered{position = event.created_entity.position, radius = 1, name = {'lua-combinator-sb', 'lua-combinator-sb-sep'}}
+		if luacombs[1] and global.combinators[luacombs[1].unit_number] then
+			local cid = luacombs[1].unit_number
+			global.combinators[cid].additional_output_entities = global.combinators[cid].additional_output_entities or {}
+			table.insert(global.combinators[cid].additional_output_entities, event.created_entity)
+			game.print(event.created_entity.unit_number..' assigned to '..cid)
+		end 
 	end
 end
 
@@ -391,32 +400,32 @@ local function on_entity_settings_pasted(event)
 	end
 end
 
-local prof
-local prof_cnt
+-- local prof
+-- local prof_cnt
 
-local function perf_start()
-	if prof_cnt%60<=0.1 and prof_cnt>0 then
-		prof.divide(prof_cnt)
-		game.print(prof)
-		prof.reset()
-		prof_cnt = 0
-	else
-		prof.restart()
-	end
+-- local function perf_start()
+-- 	if prof_cnt%60<=0.1 and prof_cnt>0 then
+-- 		prof.divide(prof_cnt)
+-- 		game.print(prof)
+-- 		prof.reset()
+-- 		prof_cnt = 0
+-- 	else
+-- 		prof.restart()
+-- 	end
 
-end
+-- end
 
-local function perf_stop()
-	prof.stop()
-	prof_cnt = prof_cnt + 1
-end
+-- local function perf_stop()
+-- 	prof.stop()
+-- 	prof_cnt = prof_cnt + 1
+-- end
 
 
 local function on_tick(event)
-	if not prof then 
-		prof = game.create_profiler()
-		prof_cnt = 0
-	end
+	-- if not prof then 
+	-- 	prof = game.create_profiler()
+	-- 	prof_cnt = 0
+	-- end
 
 	for unit_nr, gui_t in pairs(global.guis) do
 		local gui = gui_t.gui
@@ -430,7 +439,7 @@ local function on_tick(event)
 			end
 			local com983 = global.combinators[unit_nr].entity
 
-			local red, green = get_networks(com983,global.combinators[unit_nr].output)
+			local red, green = get_networks(com983,global.combinators[unit_nr].outputs[1])
 			for sig,val in pairs(red) do
 				local cap = gui.main_table.flow.add{type="label",name="red_"..sig,caption=sig.."= "..val}
 				cap.style.font_color= {r=1,g=0.3,b=0.3}
@@ -477,18 +486,43 @@ local function on_tick(event)
 
 end
 
+local function prepare_output(o)
+	local actual_output = {}
+	local i=1
+	local errors = ""
+	for signal,value in pairs(o) do
+		if global.signals[signal] then
+			if type (value) == "number" then
+				if value >= -2147483648 and value <= 2147483647 then
+					if value ~= 0 then
+						actual_output[i]={signal={type=global.signals[signal], name=signal},count=value,index=i}
+						i=i+1
+					end
+				else
+					errors =errors.."  +++output value must be between -2147483648 and 2147483647 ("..signal..")"
+				end
+			else
+				errors = errors.."  +++output value must be a number ("..signal..")"
+			end
+		else
+			errors = errors.."  +++invalid signal name in output ("..signal..")"
+		end
+	end
+	return actual_output, errors
+end
+
 function combinator_tick(unit_nr, tick)
 	tick = tick or game.tick
 	local tbl = global.combinators[unit_nr]
 
-	local output = tbl.output
-	local copiedoutput = utils.deepcopy(output)
+	local outputs = tbl.outputs
+	local copiedoutputs = utils.deepcopy(outputs)
 	local rednet, greennet
 	if tbl.usered then
-		rednet = get_red_network(tbl.entity,output)
+		rednet = get_red_network(tbl.entity, outputs[1])
 	end
 	if tbl.usegreen then
-		greennet = get_green_network(tbl.entity,output)
+		greennet = get_green_network(tbl.entity, outputs[1])
 	end
 
 	local env_ro = combinators_local[unit_nr].env_ro
@@ -499,7 +533,8 @@ function combinator_tick(unit_nr, tick)
 	env_ro.delay = 1
 	env_ro.rednet = rednet
 	env_ro.greennet = greennet
-	env_ro.output = output
+	env_ro.output = outputs[1]
+	env_ro.outputs = outputs
 
 	do
 		local _,error = pcall(func)
@@ -507,53 +542,47 @@ function combinator_tick(unit_nr, tick)
 	end
 
 	local delay = tonumber(env_ro.delay) or 1
-	output = env_ro.output or {}
+	outputs = env_ro.outputs or {}
 
-	if type(output) ~= "table" then
-		tbl.errors = tbl.errors.."  +++output needs to be a table"
+	if type(outputs) ~= "table" then
+		tbl.errors = tbl.errors.."  +++outputs needs to be a table"
 	else
-		tbl.output = output
+		tbl.outputs = outputs
 	end
 
 	env_ro.var = env_ro.var or {}
 
-	if compare_tables(copiedoutput, tbl.output) then
-		local actual_output = {}
-		local i=1
-		tbl.errors2 = ""
-		for signal,value in pairs(tbl.output) do
-			if global.signals[signal] then
-				if type (value) == "number" then
-					if value >= -2147483648 and value <= 2147483647 then
-						if value ~= 0 then
-							actual_output[i]={signal={type=global.signals[signal], name=signal},count=value,index=i}
-							i=i+1
-						end
-					else
-						tbl.errors2 =tbl.errors2.."  +++output value must be between -2147483648 and 2147483647 ("..signal..")"
-					end
+	local outputs_cnt = #(tbl.additional_output_entities or {}) + 1
+	for output_id = 1,outputs_cnt do
+		if not tbl.outputs[output_id] then
+			tbl.outputs[output_id] = {}
+		elseif type(tbl.outputs[output_id]) ~= 'table' then
+			tbl.errors = tbl.errors.."  +++output["..output_id.."] needs to be a table"
+			tbl.outputs[output_id] = {}
+		end
+	end
+
+	for output_id = 1,outputs_cnt do
+		local curr_out_tbl = tbl.outputs[output_id]
+		if compare_tables(copiedoutputs, curr_out_tbl) then
+			local actual_output = {}
+			local new_errors2 = ''
+			actual_output, new_errors2 = prepare_output(curr_out_tbl)
+			tbl.errors2 = tbl.errors2..new_errors2
+
+			local target_out
+			if output_id == 1 then
+				if not tbl.sep then
+					target_out = tbl.entity
 				else
-					tbl.errors2 = tbl.errors2.."  +++output value must be a number ("..signal..")"
+					target_out = tbl.output_proxy
 				end
 			else
-				tbl.errors2 = tbl.errors2.."  +++invalid signal name in output ("..signal..")"
-			end
-		end
-		if not tbl.entity or not tbl.entity.valid then
-			global.combinators[unit_nr]=nil
-			return
-		else
-			local target_out_comb
-			if not tbl.sep then
-				target_out_comb = tbl.entity
-			else
-				target_out_comb = tbl.output_proxy
+				target_out = global.combinators[unit_nr].additional_output_entities[output_id-1]
 			end
 
-			combinators_local_cbs[target_out_comb] = combinators_local_cbs[target_out_comb] or target_out_comb.get_or_create_control_behavior()
-			local control = combinators_local_cbs[target_out_comb]
-			-- local control = tbl.entity.get_or_create_control_behavior()
-			control.parameters={parameters=actual_output}
+			combinators_local_cbs[target_out] = combinators_local_cbs[target_out] or target_out.get_or_create_control_behavior()
+			combinators_local_cbs[target_out].parameters={parameters=actual_output}
 		end
 	end
 	if tbl.errors..tbl.errors2 ~="" then
