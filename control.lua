@@ -623,11 +623,13 @@ function combinator_tick(unit_nr, tick)
 	local outputs = tbl.outputs
 	local copiedoutputs = utils.deepcopy(outputs)
 	local rednet, greennet
+	local looped_output = tbl.sep and outputs[1] or {}
+
 	if tbl.usered then
-		rednet = get_red_network(tbl.entity, outputs[1])
+		rednet = get_red_network(tbl.entity, looped_output)
 	end
 	if tbl.usegreen then
-		greennet = get_green_network(tbl.entity, outputs[1])
+		greennet = get_green_network(tbl.entity, looped_output)
 	end
 
 	local env_ro = combinators_local[unit_nr].env_ro
@@ -640,6 +642,15 @@ function combinator_tick(unit_nr, tick)
 	env_ro.greennet = greennet
 	env_ro.output = outputs[1]
 	env_ro.outputs = outputs
+	env_ro.get_input = function (i, color)
+		local inp_entity = tbl.additional_input_entities[i]
+		combinators_local_cbs[inp_entity] = combinators_local_cbs[inp_entity] or inp_entity.get_or_create_control_behavior()
+		if color=='red' then
+			return get_red_network(inp_entity)
+		elseif color=='green' then
+			return get_green_network(inp_entity)
+		end
+	end
 
 	do
 		local _,error = pcall(func)
@@ -724,12 +735,19 @@ function compare_tables (t1,t2)
 	return false
 end
 
+local cbmap = {
+	[defines.control_behavior.type.arithmetic_combinator] = defines.circuit_connector_id.combinator_input,
+	[defines.control_behavior.type.constant_combinator] = defines.circuit_connector_id.constant_combinator,
+	[defines.control_behavior.type.lamp] = defines.circuit_connector_id.lamp,
+}
+
 function get_col_network (entity, output, wire_type)
-	combinators_local_cbs[entity] = combinators_local_cbs[entity] or entity.get_control_behavior()
-	local is_sep = global.combinators[entity.unit_number].sep
-	local ccid = is_sep and defines.circuit_connector_id.constant_combinator or defines.circuit_connector_id.combinator_input
-	local cnw = combinators_local_cbs[entity].get_circuit_network(wire_type, ccid)
-	if is_sep then output={} end
+	combinators_local_cbs[entity] = combinators_local_cbs[entity] or entity.get_or_create_control_behavior()
+	local control_behavior = combinators_local_cbs[entity]
+	-- local is_sep = global.combinators[entity.unit_number].sep
+	local ccid = cbmap[control_behavior.type]
+	local cnw = control_behavior.get_circuit_network(wire_type, ccid)
+	output = output or {}
 	local ret_red = {}
 	if cnw and cnw.signals then
 		for _, tbl in pairs(cnw.signals) do
