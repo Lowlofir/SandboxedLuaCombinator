@@ -243,7 +243,7 @@ function inputs_registry.assign(comb_eid, input_ent)
 	table.insert(global.combinators[comb_eid].additional_input_entities, input_ent)
 	global.inputs[input_ent.unit_number] = comb_eid
 	combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
-	game.print(input_ent.unit_number..' assigned to '..comb_eid)
+	-- game.print(input_ent.unit_number..' assigned to '..comb_eid)
 end
 
 function inputs_registry.unassign(comb_eid, input_ent)
@@ -252,7 +252,7 @@ function inputs_registry.unassign(comb_eid, input_ent)
 	table.remove(global.combinators[comb_eid].additional_input_entities, pos)
 	global.inputs[input_ent.unit_number] = nil
 	combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
-	game.print(input_ent.unit_number..' unassigned from '..comb_eid)
+	-- game.print(input_ent.unit_number..' unassigned from '..comb_eid)
 end
 
 function inputs_registry.get_assignation(input_ent_id)
@@ -484,7 +484,7 @@ local function on_built_entity(event)
 
 	local new_ent = event.created_entity
 
-	if new_ent.name == "lua-combinator-sb" or new_ent.name == "lua-combinator-sb-sep"then
+	if new_ent.name == "lua-combinator-sb" or new_ent.name == "lua-combinator-sb-sep" then
 		local unit_id = new_ent.unit_number
 		combinators_local.register(unit_id)
 
