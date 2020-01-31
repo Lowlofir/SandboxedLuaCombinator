@@ -242,6 +242,7 @@ function inputs_registry.assign(comb_eid, input_ent)
 	global.combinators[comb_eid].additional_input_entities = global.combinators[comb_eid].additional_input_entities or {}
 	table.insert(global.combinators[comb_eid].additional_input_entities, input_ent)
 	global.inputs[input_ent.unit_number] = comb_eid
+	combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
 	game.print(input_ent.unit_number..' assigned to '..comb_eid)
 end
 
@@ -250,6 +251,7 @@ function inputs_registry.unassign(comb_eid, input_ent)
 	assert(pos)
 	table.remove(global.combinators[comb_eid].additional_input_entities, pos)
 	global.inputs[input_ent.unit_number] = nil
+	combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
 	game.print(input_ent.unit_number..' unassigned from '..comb_eid)
 end
 
@@ -315,31 +317,105 @@ script.on_event(defines.events.on_pre_ghost_deconstructed, on_destroyed)
 
 
 function load_combinator_code(id)
-	local env_ro, env_var = create_env(global.combinators[id].variables)
-	combinators_local[id].env_ro = env_ro
-	combinators_local[id].env_var = env_var
+	local env = setup_env(id)
 	local code = global.combinators[id].code
-	return load(code, code, 't', env_var)
+	return load(code, code, 't', env)
 end
 
-function create_env(v)
-	assert(v and type(v)=='table')
-	v.var = v.var or {}
 
+local inputs_controller_class = {}
+
+function inputs_controller_class:make_input(inp_id)
+	local single_input_meta = {}
+	if inp_id == 1 then
+		single_input_meta.inp_entity = self.comb_tbl.entity
+		single_input_meta.looped_outp = self.comb_tbl.sep and {} or self.comb_tbl.outputs[1]
+	else
+		single_input_meta.inp_entity = self.comb_tbl.additional_input_entities[inp_id-1]
+		single_input_meta.looped_outp = {}
+	end
+
+	function single_input_meta.__index(input_tbl, k)
+		if k=='rednet' then
+			rawset(input_tbl, 'rednet', get_red_network(single_input_meta.inp_entity, single_input_meta.looped_outp))
+			return input_tbl.rednet
+		elseif k=='greennet' then
+			rawset(input_tbl, 'greennet', get_green_network(single_input_meta.inp_entity, single_input_meta.looped_outp))
+			return input_tbl.greennet
+		elseif k=='reset' then
+			rawset(input_tbl, 'rednet', nil)
+			rawset(input_tbl, 'greennet', nil)
+		end
+	end
+	function single_input_meta.__newindex(input_tbl, k, v)
+	end
+
+	local input = setmetatable({}, single_input_meta)
+	return input
+end
+
+function inputs_controller_class:get_inputs_table()
+	if self.inputs_table then 
+		return self.inputs_table 
+	end
+	local inputs_meta = {
+		__index = function (inputs_tbl, input_index)
+			if type(input_index)=='number' and (input_index==1 or self.comb_tbl.additional_input_entities[input_index-1]) then
+				inputs_tbl[input_index] = self:make_input(input_index)
+				return inputs_tbl[input_index]
+			end
+		end
+	}
+	self.inputs_table = setmetatable({}, inputs_meta)
+	return self.inputs_table
+end
+
+function inputs_controller_class:on_tick()
+	if self.inputs_table then 
+		for k,v in pairs(self.inputs_table) do
+			local _ = v.reset
+		end
+	end
+end
+
+function inputs_controller_class:on_inputs_list_changed()
+	self.inputs_table = nil
+end
+
+local inputs_controller_mt = {__index = inputs_controller_class}
+
+local function make_inputs_controller(cid)
+	local comb_tbl = global.combinators[cid]
+	local controller = setmetatable({comb_tbl=comb_tbl}, inputs_controller_mt)
+	return controller
+end
+
+function setup_env(cid)
+	if not sandbox_env_std.game then
+		sandbox_env_std.game = {
+			-- item_prototypes = game.item_prototypes,
+			-- recipe_prototypes = game.recipe_prototypes,
+			tick = game.tick, -- just an initialization
+		}
+		setmetatable(sandbox_env_std.game, {__index=function (tbl, k)
+			if k=='item_prototypes' or k=='recipe_prototypes' then 
+				return game[k]
+			end
+		end})
+		sandbox_env_std.print = game.print
+	end
+
+
+	local tbl = global.combinators[cid]
+
+	local inputs_controller = make_inputs_controller(cid)
+	combinators_local[cid].inputs_controller = inputs_controller
+	
 	local ro_meta = {
 		__index = sandbox_env_std,
 	}
-	local ro_env = setmetatable({}, ro_meta)
 
-	if not sandbox_env_std.game then
-		sandbox_env_std.game = {
-			item_prototypes = game.item_prototypes,
-			recipe_prototypes = game.recipe_prototypes,
-			-- print = game.print,
-			tick = game.tick, -- just an initialization
-		}
-	end
-	ro_env.print = game.print
+	local ro_env = setmetatable({inputs = inputs_controller:get_inputs_table()}, ro_meta)
 
 	local var_meta = {
 		__index = ro_env,
@@ -351,9 +427,14 @@ function create_env(v)
 			end
 		end
 	}
-	local var_env = setmetatable(v, var_meta)
-	return ro_env, var_env
+	local var_env = setmetatable(tbl.variables, var_meta)
+
+	combinators_local[cid].env_ro = ro_env
+	combinators_local[cid].env_var = var_env
+
+	return var_env
 end
+
 
 function load_code(code,id)
 	local test=remove_colors(code)
@@ -525,12 +606,29 @@ end
 -- 	prof_cnt = prof_cnt + 1
 -- end
 
+local type_count = {}
+function find_lua_custom_table(t)
+	for k,v in pairs(t) do
+		type_count[type(v)] = type_count[type(v)] or 0
+		type_count[type(v)] = type_count[type(v)] + 1
+		if type(v) == 'table' then
+			find_lua_custom_table(v)
+		end
+	end
+end
 
 local function on_tick(event)
 	-- if not prof then 
 	-- 	prof = game.create_profiler()
 	-- 	prof_cnt = 0
 	-- end
+	-- if event.tick % 600 == 0 then
+
+	-- 	log(serpent.block(global))
+	-- 	find_lua_custom_table(global)
+	-- 	log(serpent.block(type_count))
+	-- end
+	-- error('errooor')
 
 	for unit_nr, gui_t in pairs(global.guis) do
 		local gui = gui_t.gui
@@ -637,20 +735,12 @@ function combinator_tick(unit_nr, tick)
 	assert(env_ro, 'no env')
 	assert(func, 'no func')
 
+	combinators_local[unit_nr].inputs_controller:on_tick()
 	env_ro.delay = 1
 	env_ro.rednet = rednet
 	env_ro.greennet = greennet
 	env_ro.output = outputs[1]
 	env_ro.outputs = outputs
-	env_ro.get_input = function (i, color)
-		local inp_entity = tbl.additional_input_entities[i]
-		combinators_local_cbs[inp_entity] = combinators_local_cbs[inp_entity] or inp_entity.get_or_create_control_behavior()
-		if color=='red' then
-			return get_red_network(inp_entity)
-		elseif color=='green' then
-			return get_green_network(inp_entity)
-		end
-	end
 
 	do
 		local _,error = pcall(func)
