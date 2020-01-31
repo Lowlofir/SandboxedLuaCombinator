@@ -390,6 +390,16 @@ local function make_inputs_controller(cid)
 	return controller
 end
 
+
+local function make_custom_table_proxy(ct_game_key)
+	local custom_table_proxy_mt = {
+		__index = function (tbl, k)
+			return game[ct_game_key][k]
+		end
+	}
+	return setmetatable({}, custom_table_proxy_mt)
+end
+
 function setup_env(cid)
 	if not sandbox_env_std.game then
 		sandbox_env_std.game = {
@@ -398,8 +408,8 @@ function setup_env(cid)
 			tick = game.tick, -- just an initialization
 		}
 		setmetatable(sandbox_env_std.game, {__index=function (tbl, k)
-			if k=='item_prototypes' or k=='recipe_prototypes' then 
-				return game[k]
+			if k=='item_prototypes' or k=='recipe_prototypes' then
+				return make_custom_table_proxy(k)
 			end
 		end})
 		sandbox_env_std.print = game.print
