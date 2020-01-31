@@ -244,11 +244,17 @@ function create_env(v)
 
 	if not sandbox_env_std.game then
 		sandbox_env_std.game = {
-			item_prototypes = game.item_prototypes,
-			recipe_prototypes = game.recipe_prototypes,
+
+			-- item_prototypes = game.item_prototypes,
+			-- recipe_prototypes = game.recipe_prototypes,
 			-- print = game.print,
 			tick = game.tick, -- just an initialization
 		}
+		-- setmetatable(sandbox_env_std.game, {__index=function (tbl,k)
+		-- 	if k=='item_prototypes' or k=='recipe_prototypes' then
+		-- 		return game[k]
+		-- 	end
+		-- end})
 	end
 	ro_env.print = game.print
 
@@ -390,32 +396,32 @@ local function on_entity_settings_pasted(event)
 	end
 end
 
-local prof
-local prof_cnt
+-- local prof
+-- local prof_cnt
 
-local function perf_start()
-	if prof_cnt%60<=0.1 and prof_cnt>0 then
-		prof.divide(prof_cnt)
-		game.print(prof)
-		prof.reset()
-		prof_cnt = 0
-	else
-		prof.restart()
-	end
+-- local function perf_start()
+-- 	if prof_cnt%60<=0.1 and prof_cnt>0 then
+-- 		prof.divide(prof_cnt)
+-- 		game.print(prof)
+-- 		prof.reset()
+-- 		prof_cnt = 0
+-- 	else
+-- 		prof.restart()
+-- 	end
 
-end
+-- end
 
-local function perf_stop()
-	prof.stop()
-	prof_cnt = prof_cnt + 1
-end
+-- local function perf_stop()
+-- 	prof.stop()
+-- 	prof_cnt = prof_cnt + 1
+-- end
 
 
 local function on_tick(event)
-	if not prof then 
-		prof = game.create_profiler()
-		prof_cnt = 0
-	end
+	-- if not prof then 
+	-- 	prof = game.create_profiler()
+	-- 	prof_cnt = 0
+	-- end
 
 	for unit_nr, gui_t in pairs(global.guis) do
 		local gui = gui_t.gui
