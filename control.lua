@@ -345,23 +345,17 @@ local outputs_controller_class = {}
 
 function outputs_controller_class:make_output(outp_id)
 	local single_output_meta = {}
-	if outp_id == 1 then
-		single_output_meta.outp_entity = self.comb_tbl.entity
-	else
-		single_output_meta.outp_entity = self.comb_tbl.additional_output_entities[outp_id-1]
-	end
 
-
-	function single_output_meta.__index(output_tbl, k)
-		self.dirt_map[outp_id] = true
-		return output_tbl[k]
-	end
+	-- function single_output_meta.__index(output_tbl, k)
+	-- 	self.dirt_map[outp_id] = true
+	-- 	return output_tbl[k]
+	-- end
 	function single_output_meta.__newindex(output_tbl, k, v)
 		self.dirt_map[outp_id] = true
 		rawset(output_tbl, k, v)
 	end
 
-	local output = setmetatable(self.comb_tbl.outputs[outp_id], single_output_meta)
+	local output = setmetatable({}, single_output_meta)
 	return output
 end
 
@@ -392,40 +386,40 @@ end
 
 function outputs_controller_class:on_post_tick()
 	local tbl = self.comb_tbl
-	local outputs_cnt = #(tbl.additional_output_entities or {}) + 1
-	for output_id = 1,outputs_cnt do
-		if not tbl.outputs[output_id] then
-			tbl.outputs[output_id] = {}
-		elseif type(tbl.outputs[output_id]) ~= 'table' then
-			tbl.errors = tbl.errors.."  +++output["..output_id.."] needs to be a table"
-			tbl.outputs[output_id] = {}
-		end
-	end
+	-- local outputs_cnt = #(tbl.additional_output_entities or {}) + 1
+	-- for output_id = 1,outputs_cnt do
+	-- 	if not tbl.outputs[output_id] then
+	-- 		tbl.outputs[output_id] = {}
+	-- 	elseif type(tbl.outputs[output_id]) ~= 'table' then
+	-- 		tbl.errors = tbl.errors.."  +++output["..output_id.."] needs to be a table"
+	-- 		tbl.outputs[output_id] = {}
+	-- 	end
+	-- end
 
-	for output_id = 1,outputs_cnt do
+	for output_id,_ in pairs(self.dirt_map) do
+		for k,v in pairs(self.outputs_table[output_id]) do
+			tbl.outputs[output_id][k] = v
+			rawset(self.outputs_table[output_id], k, nil)
+		end
+
 		local curr_out_tbl = tbl.outputs[output_id]
-		if self.dirt_map[output_id] then
-			local actual_output = {}
-			local new_errors2 = ''
-			actual_output, new_errors2 = prepare_output(curr_out_tbl)
-			tbl.errors2 = tbl.errors2..new_errors2
+		local actual_output, new_errors2 = prepare_output(curr_out_tbl)
+		tbl.errors2 = tbl.errors2..new_errors2
 
-			local target_out
-			if output_id == 1 then
-				if not tbl.sep then
-					target_out = tbl.entity
-				else
-					target_out = tbl.output_proxy
-				end
+		local target_out
+		if output_id == 1 then
+			if not tbl.sep then
+				target_out = tbl.entity
 			else
-				target_out = tbl.additional_output_entities[output_id-1]
+				target_out = tbl.output_proxy
 			end
-
-			combinators_local_cbs.get(target_out).cb.parameters={parameters=actual_output}
+		else
+			target_out = tbl.additional_output_entities[output_id-1]
 		end
-	end
 
-	self.dirt_map = {}
+		combinators_local_cbs.get(target_out).cb.parameters={parameters=actual_output}
+		self.dirt_map[output_id] = nil
+	end
 end
 
 function outputs_controller_class:get_outputs_table()
@@ -436,7 +430,6 @@ function outputs_controller_class:get_outputs_table()
 		__index = function (outputs_tbl, output_index)
 			if output_index==1 or self.comb_tbl.additional_output_entities[output_index-1] then
 				local outp = self:make_output(output_index)
-				game.print('self:make_output('..output_index..') for '..self.comb_tbl.entity.unit_number)
 				outputs_tbl[output_index] = outp
 				return outp
 			end
@@ -498,7 +491,7 @@ function inputs_controller_class:get_inputs_table()
 		__index = function (inputs_tbl, input_index)
 			if input_index==1 or self.comb_tbl.additional_input_entities[input_index-1] then
 				local inp = self:make_input(input_index)
-				game.print('self:make_input('..input_index..') for '..self.comb_tbl.entity.unit_number)
+				-- game.print('self:make_input('..input_index..') for '..self.comb_tbl.entity.unit_number)
 				inputs_tbl[input_index] = inp
 				return inp
 			end
@@ -603,10 +596,10 @@ function load_code(code,id)
 		global.combinators[id].errors = ""
 	end
 	global.combinators[id].errors2 = ""
-	local _, countred = string.gsub(global.combinators[id].code, "rednet", "")
-	local _, countgreen = string.gsub(global.combinators[id].code, "greennet", "")
-	global.combinators[id].usered = (countred > 0)
-	global.combinators[id].usegreen = (countgreen > 0)
+	-- local _, countred = string.gsub(global.combinators[id].code, "rednet", "")
+	-- local _, countgreen = string.gsub(global.combinators[id].code, "greennet", "")
+	-- global.combinators[id].usered = (countred > 0)
+	-- global.combinators[id].usegreen = (countgreen > 0)
 	write_to_combinator(global.combinators[id].blueprint_data,global.combinators[id].code)
 	if global.combinators[id].entity.valid then
 		for _, player in pairs(game.players) do
@@ -735,14 +728,15 @@ local function on_entity_settings_pasted(event)
 		if not global.combinators[dst_id].errors then
 			global.combinators[dst_id].errors = ""
 		end
-		local _, countred = string.gsub(global.combinators[dst_id].code, "rednet", "")
-		local _, countgreen = string.gsub(global.combinators[dst_id].code, "greennet", "")
-		global.combinators[dst_id].usered = (countred > 0)
-		global.combinators[dst_id].usegreen = (countgreen > 0)
+		-- local _, countred = string.gsub(global.combinators[dst_id].code, "rednet", "")
+		-- local _, countgreen = string.gsub(global.combinators[dst_id].code, "greennet", "")
+		-- global.combinators[dst_id].usered = (countred > 0)
+		-- global.combinators[dst_id].usegreen = (countgreen > 0)
 		global.combinators[dst_id].formatting = global.combinators[src_id].formatting
 		write_to_combinator(global.combinators[dst_id].blueprint_data,global.combinators[dst_id].code)
 	end
 end
+
 
 
 local function on_tick(event)
@@ -781,8 +775,8 @@ local function on_tick(event)
 	for unit_nr, tbl in pairs(global.combinators) do
 		if not tbl.entity or not tbl.entity.valid then
 			game.print('not tbl.entity or not tbl.entity.valid')
-			if global.combinators[unit_nr].blueprint_data and global.combinators[unit_nr].blueprint_data.valid then
-				global.combinators[unit_nr].blueprint_data.destroy()
+			if tbl.blueprint_data and tbl.blueprint_data.valid then
+				tbl.blueprint_data.destroy()
 			end
 			global.combinators[unit_nr]=nil
 			combinators_local.unregister(unit_nr)
@@ -818,8 +812,8 @@ function combinator_tick(unit_nr, tick)
 	local env_ro = combinator_local_dta.env_ro
 	local env_var = combinator_local_dta.env_var
 	local func = combinator_local_dta.func
-	assert(env_ro, 'no env')
-	assert(func, 'no func')
+	-- assert(env_ro, 'no env')
+	-- assert(func, 'no func')
 
 	env_var.delay = 1
 
@@ -833,7 +827,7 @@ function combinator_tick(unit_nr, tick)
 	env_ro.var = env_ro.var or {}
 
 	combinator_local_dta.outputs_controller:on_post_tick()
-	if tbl.errors..tbl.errors2 ~="" then
+	if tbl.errors~="" or tbl.errors2 ~="" then
 		for _, player in pairs(game.players) do
 			if player.force == tbl.entity.last_user.force then
 				player.add_custom_alert(tbl.entity,{type="virtual", name="luacomsb_error"},"LuaCombinator Error: "..tbl.errors..tbl.errors2,true)
@@ -841,7 +835,6 @@ function combinator_tick(unit_nr, tick)
 		end
 	end
 	tbl.next_tick = tick + delay
-
 end
 
 script.on_event(defines.events.on_built_entity, on_built_entity)
