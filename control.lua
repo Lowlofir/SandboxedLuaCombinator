@@ -46,6 +46,23 @@ end
 
 local combinators_local_cbs = {}
 
+local cbmap = {
+	[defines.control_behavior.type.arithmetic_combinator] = defines.circuit_connector_id.combinator_input,
+	[defines.control_behavior.type.constant_combinator] = defines.circuit_connector_id.constant_combinator,
+	[defines.control_behavior.type.lamp] = defines.circuit_connector_id.lamp,
+}
+
+function combinators_local_cbs.get(entity)
+	if combinators_local_cbs[entity] then
+		return combinators_local_cbs[entity]
+	end
+	local cb = entity.get_or_create_control_behavior()
+	local ccid = cbmap[cb.type]
+	local tbl = { cb = cb, ccid = ccid }
+	combinators_local_cbs[entity] = tbl
+	return tbl
+end
+
 
 settings_cache = {}
 
@@ -323,6 +340,69 @@ function load_combinator_code(id)
 end
 
 
+
+local outputs_controller_class = {}
+
+function outputs_controller_class:make_output(outp_id)
+	local single_output_meta = {}
+	if outp_id == 1 then
+		single_output_meta.outp_entity = self.comb_tbl.entity
+	else
+		single_output_meta.outp_entity = self.comb_tbl.additional_output_entities[outp_id-1]
+	end
+
+
+	function single_output_meta.__index(output_tbl, k)
+		self.dirt_map[outp_id] = true
+		return output_tbl[k]
+	end
+	function single_output_meta.__newindex(output_tbl, k, v)
+		self.dirt_map[outp_id] = true
+		rawset(output_tbl, k, v)
+	end
+
+	local output = setmetatable({}, single_output_meta)
+	return output
+end
+
+function outputs_controller_class:on_post_tick()
+	for k,v in pairs(self.outputs_table) do
+		if self.dirt_map[k] then
+
+		end
+	end
+	self.dirt_map = {}
+end
+
+function outputs_controller_class:get_outputs_table()
+	if self.outputs_table then
+		return self.outputs_table
+	end
+	local outputs_meta = {
+		__index = function (outputs_tbl, output_index)
+			if output_index==1 or self.comb_tbl.additional_output_entities[output_index-1] then
+				local outp = self:make_output(output_index)
+				game.print('self:make_output('..output_index..') for '..self.comb_tbl.entity.unit_number)
+				outputs_tbl[output_index] = outp
+				return outp
+			end
+		end
+	}
+	self.outputs_table = setmetatable({}, outputs_meta)
+	return self.outputs_table
+end
+
+
+local outputs_controller_mt = {__index = outputs_controller_class}
+
+local function make_outputs_controller(cid)
+	local comb_tbl = global.combinators[cid]
+	local controller = setmetatable({comb_tbl=comb_tbl}, outputs_controller_mt)
+	return controller
+end
+
+
+
 local inputs_controller_class = {}
 
 function inputs_controller_class:make_input(inp_id)
@@ -337,11 +417,13 @@ function inputs_controller_class:make_input(inp_id)
 
 	function single_input_meta.__index(input_tbl, k)
 		if k=='rednet' then
-			rawset(input_tbl, 'rednet', get_red_network(single_input_meta.inp_entity, single_input_meta.looped_outp))
-			return input_tbl.rednet
+			local rn = get_red_network(single_input_meta.inp_entity, single_input_meta.looped_outp)
+			rawset(input_tbl, 'rednet', rn)
+			return rn
 		elseif k=='greennet' then
-			rawset(input_tbl, 'greennet', get_green_network(single_input_meta.inp_entity, single_input_meta.looped_outp))
-			return input_tbl.greennet
+			local gn = get_green_network(single_input_meta.inp_entity, single_input_meta.looped_outp)
+			rawset(input_tbl, 'greennet', gn)
+			return gn
 		elseif k=='reset' then
 			rawset(input_tbl, 'rednet', nil)
 			rawset(input_tbl, 'greennet', nil)
@@ -355,14 +437,16 @@ function inputs_controller_class:make_input(inp_id)
 end
 
 function inputs_controller_class:get_inputs_table()
-	if self.inputs_table then 
-		return self.inputs_table 
+	if self.inputs_table then
+		return self.inputs_table
 	end
 	local inputs_meta = {
 		__index = function (inputs_tbl, input_index)
-			if type(input_index)=='number' and (input_index==1 or self.comb_tbl.additional_input_entities[input_index-1]) then
-				inputs_tbl[input_index] = self:make_input(input_index)
-				return inputs_tbl[input_index]
+			if input_index==1 or self.comb_tbl.additional_input_entities[input_index-1] then
+				local inp = self:make_input(input_index)
+				game.print('self:make_input('..input_index..') for '..self.comb_tbl.entity.unit_number)
+				inputs_tbl[input_index] = inp
+				return inp
 			end
 		end
 	}
@@ -371,15 +455,15 @@ function inputs_controller_class:get_inputs_table()
 end
 
 function inputs_controller_class:on_tick()
-	if self.inputs_table then 
-		for k,v in pairs(self.inputs_table) do
-			local _ = v.reset
-		end
+	for k,v in pairs(self.inputs_table) do
+		local _ = v.reset
 	end
 end
 
 function inputs_controller_class:on_inputs_list_changed()
-	self.inputs_table = nil
+	for k,v in pairs(self.inputs_table) do
+		self.inputs_table[k] = nil
+	end
 end
 
 local inputs_controller_mt = {__index = inputs_controller_class}
@@ -409,33 +493,43 @@ function setup_env(cid)
 		}
 		setmetatable(sandbox_env_std.game, {__index=function (tbl, k)
 			if k=='item_prototypes' or k=='recipe_prototypes' then
-				return make_custom_table_proxy(k)
+				tbl[k] = make_custom_table_proxy(k)
+				return tbl[k]
 			end
 		end})
 		sandbox_env_std.print = game.print
 	end
-
 
 	local tbl = global.combinators[cid]
 
 	local inputs_controller = make_inputs_controller(cid)
 	combinators_local[cid].inputs_controller = inputs_controller
 	
+	local outputs_controller = make_outputs_controller(cid)
+	combinators_local[cid].outputs_controller = outputs_controller
+
 	local ro_meta = {
 		__index = sandbox_env_std,
 	}
 
-	local ro_env = setmetatable({inputs = inputs_controller:get_inputs_table()}, ro_meta)
+	local inptbl = inputs_controller:get_inputs_table()
+	local outptbl = outputs_controller:get_outputs_table()
+
+	local ro_env = setmetatable({ 
+		inputs = inptbl,
+		outputs = outptbl,
+		output = outptbl[1],
+		rednet = setmetatable({}, {__index = function (tbl, k)
+			return inptbl[1].rednet[k]
+		end}),
+		greennet = setmetatable({}, {__index = function (tbl, k)
+			return inptbl[1].greennet[k]
+		end})
+
+	}, ro_meta)
 
 	local var_meta = {
 		__index = ro_env,
-		__newindex = function (table, key, value)
-			if rawget(ro_env, key) then
-				ro_env[key] = value
-			else
-				rawset(table, key, value)
-			end
-		end
 	}
 	local var_env = setmetatable(tbl.variables, var_meta)
 
@@ -596,49 +690,8 @@ local function on_entity_settings_pasted(event)
 	end
 end
 
--- local prof
--- local prof_cnt
-
--- local function perf_start()
--- 	if prof_cnt%60<=0.1 and prof_cnt>0 then
--- 		prof.divide(prof_cnt)
--- 		game.print(prof)
--- 		prof.reset()
--- 		prof_cnt = 0
--- 	else
--- 		prof.restart()
--- 	end
-
--- end
-
--- local function perf_stop()
--- 	prof.stop()
--- 	prof_cnt = prof_cnt + 1
--- end
-
-local type_count = {}
-function find_lua_custom_table(t)
-	for k,v in pairs(t) do
-		type_count[type(v)] = type_count[type(v)] or 0
-		type_count[type(v)] = type_count[type(v)] + 1
-		if type(v) == 'table' then
-			find_lua_custom_table(v)
-		end
-	end
-end
 
 local function on_tick(event)
-	-- if not prof then 
-	-- 	prof = game.create_profiler()
-	-- 	prof_cnt = 0
-	-- end
-	-- if event.tick % 600 == 0 then
-
-	-- 	log(serpent.block(global))
-	-- 	find_lua_custom_table(global)
-	-- 	log(serpent.block(type_count))
-	-- end
-	-- error('errooor')
 
 	for unit_nr, gui_t in pairs(global.guis) do
 		local gui = gui_t.gui
@@ -666,7 +719,7 @@ local function on_tick(event)
 	end
 
 
-	if (sandbox_env_std.game) then
+	if sandbox_env_std.game then
 		sandbox_env_std.game.tick = event.tick
 	end
 
@@ -730,26 +783,19 @@ function combinator_tick(unit_nr, tick)
 
 	local outputs = tbl.outputs
 	local copiedoutputs = utils.deepcopy(outputs)
-	local rednet, greennet
-	local looped_output = tbl.sep and outputs[1] or {}
 
-	if tbl.usered then
-		rednet = get_red_network(tbl.entity, looped_output)
-	end
-	if tbl.usegreen then
-		greennet = get_green_network(tbl.entity, looped_output)
-	end
 
-	local env_ro = combinators_local[unit_nr].env_ro
-	local func = combinators_local[unit_nr].func
+	local combinator_local_dta = combinators_local[unit_nr]
+	combinator_local_dta.inputs_controller:on_tick()
+
+	local env_ro = combinator_local_dta.env_ro
+	local env_var = combinator_local_dta.env_var
+	local func = combinator_local_dta.func
 	assert(env_ro, 'no env')
 	assert(func, 'no func')
 
-	combinators_local[unit_nr].inputs_controller:on_tick()
-	env_ro.delay = 1
-	env_ro.rednet = rednet
-	env_ro.greennet = greennet
-	env_ro.output = outputs[1]
+	env_var.delay = 1
+	env_var.output = outputs[1]
 	env_ro.outputs = outputs
 
 	do
@@ -757,14 +803,14 @@ function combinator_tick(unit_nr, tick)
 		tbl.errors=error or ""
 	end
 
-	local delay = tonumber(env_ro.delay) or 1
-	outputs = env_ro.outputs or {}
+	local delay = tonumber(env_var.delay) or 1
+	-- outputs = env_ro.outputs or {}
 
-	if type(outputs) ~= "table" then
-		tbl.errors = tbl.errors.."  +++outputs needs to be a table"
-	else
-		tbl.outputs = outputs
-	end
+	-- if type(outputs) ~= "table" then
+	-- 	tbl.errors = tbl.errors.."  +++outputs needs to be a table"
+	-- else
+	-- 	tbl.outputs = outputs
+	-- end
 
 	env_ro.var = env_ro.var or {}
 
@@ -797,8 +843,7 @@ function combinator_tick(unit_nr, tick)
 				target_out = global.combinators[unit_nr].additional_output_entities[output_id-1]
 			end
 
-			combinators_local_cbs[target_out] = combinators_local_cbs[target_out] or target_out.get_or_create_control_behavior()
-			combinators_local_cbs[target_out].parameters={parameters=actual_output}
+			combinators_local_cbs.get(target_out).cb.parameters={parameters=actual_output}
 		end
 	end
 	if tbl.errors..tbl.errors2 ~="" then
@@ -835,18 +880,10 @@ function compare_tables (t1,t2)
 	return false
 end
 
-local cbmap = {
-	[defines.control_behavior.type.arithmetic_combinator] = defines.circuit_connector_id.combinator_input,
-	[defines.control_behavior.type.constant_combinator] = defines.circuit_connector_id.constant_combinator,
-	[defines.control_behavior.type.lamp] = defines.circuit_connector_id.lamp,
-}
 
 function get_col_network (entity, output, wire_type)
-	combinators_local_cbs[entity] = combinators_local_cbs[entity] or entity.get_or_create_control_behavior()
-	local control_behavior = combinators_local_cbs[entity]
-	-- local is_sep = global.combinators[entity.unit_number].sep
-	local ccid = cbmap[control_behavior.type]
-	local cnw = control_behavior.get_circuit_network(wire_type, ccid)
+	local cb_data = combinators_local_cbs.get(entity)
+	local cnw = cb_data.cb.get_circuit_network(wire_type, cb_data.ccid)
 	output = output or {}
 	local ret_red = {}
 	if cnw and cnw.signals then
