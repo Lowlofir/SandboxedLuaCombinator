@@ -342,15 +342,13 @@ end
 local outputs_controller_class = {}
 
 function outputs_controller_class:make_output(outp_id)
-	local single_output_meta = {}
-
-	-- function single_output_meta.__index(output_tbl, k)
-	-- 	self.dirt_map[outp_id] = true
-	-- 	return output_tbl[k]
-	-- end
+	local single_output_meta = {  }  --__index=self.comb_tbl.outputs[outp_id]
+	self.comb_tbl.outputs[outp_id] = self.comb_tbl.outputs[outp_id] or {}
+	single_output_meta.real_out_tbl = self.comb_tbl.outputs[outp_id]
 	function single_output_meta.__newindex(output_tbl, k, v)
+		-- game.print('__newindex('..self.comb_tbl.entity.unit_number..', '..k..', '..tostring(v)..')')
 		self.dirt_map[outp_id] = true
-		rawset(output_tbl, k, v)
+		single_output_meta.real_out_tbl[k] = v
 	end
 
 	local output = setmetatable({}, single_output_meta)
@@ -384,22 +382,8 @@ end
 
 function outputs_controller_class:on_post_tick()
 	local tbl = self.comb_tbl
-	-- local outputs_cnt = #(tbl.additional_output_entities or {}) + 1
-	-- for output_id = 1,outputs_cnt do
-	-- 	if not tbl.outputs[output_id] then
-	-- 		tbl.outputs[output_id] = {}
-	-- 	elseif type(tbl.outputs[output_id]) ~= 'table' then
-	-- 		tbl.errors = tbl.errors.."  +++output["..output_id.."] needs to be a table"
-	-- 		tbl.outputs[output_id] = {}
-	-- 	end
-	-- end
 
 	for output_id,_ in pairs(self.dirt_map) do
-		for k,v in pairs(self.outputs_table[output_id]) do
-			tbl.outputs[output_id][k] = v
-			rawset(self.outputs_table[output_id], k, nil)
-		end
-
 		local curr_out_tbl = tbl.outputs[output_id]
 		local actual_output, new_errors2 = prepare_output(curr_out_tbl)
 		tbl.errors2 = tbl.errors2..new_errors2
