@@ -33,6 +33,8 @@ table.insert(M, {
             tbl.func = nil
             tbl.usered = nil
             tbl.usegreen = nil
+            tbl.additional_output_entities = tbl.additional_output_entities or {}
+            tbl.additional_input_entities = tbl.additional_input_entities or {}
         end
     end
 })

@@ -342,11 +342,15 @@ end
 local outputs_controller_class = {}
 
 function outputs_controller_class:make_output(outp_id)
-	local single_output_meta = {  }  --__index=self.comb_tbl.outputs[outp_id]
+	local single_output_meta = { __index=self.comb_tbl.outputs[outp_id] }  --
 	self.comb_tbl.outputs[outp_id] = self.comb_tbl.outputs[outp_id] or {}
 	single_output_meta.real_out_tbl = self.comb_tbl.outputs[outp_id]
 	function single_output_meta.__newindex(output_tbl, k, v)
 		-- game.print('__newindex('..self.comb_tbl.entity.unit_number..', '..k..', '..tostring(v)..')')
+		local valid_v = v==nil or (type(v)=='number' and v >= -2147483648 and v <= 2147483647)
+		if not valid_v then
+			error('wrong output value', 2)
+		end
 		self.dirt_map[outp_id] = true
 		single_output_meta.real_out_tbl[k] = v
 	end
@@ -410,11 +414,15 @@ function outputs_controller_class:get_outputs_table()
 	end
 	local outputs_meta = {
 		__index = function (outputs_tbl, output_index)
-			if output_index==1 or self.comb_tbl.additional_output_entities[output_index-1] then
+			if output_index==1 or (type(output_index)=='number' and self.comb_tbl.additional_output_entities[output_index-1]) then
 				local outp = self:make_output(output_index)
-				outputs_tbl[output_index] = outp
+				rawset(outputs_tbl, output_index, outp)
 				return outp
 			end
+		end,
+		__newindex = function (tbl, k, v) end,
+		__len = function (tbl)
+			return #self.comb_tbl.additional_output_entities + 1
 		end
 	}
 	self.outputs_table = setmetatable({}, outputs_meta)
@@ -474,9 +482,14 @@ function inputs_controller_class:get_inputs_table()
 			if input_index==1 or self.comb_tbl.additional_input_entities[input_index-1] then
 				local inp = self:make_input(input_index)
 				-- game.print('self:make_input('..input_index..') for '..self.comb_tbl.entity.unit_number)
-				inputs_tbl[input_index] = inp
+				rawset(inputs_tbl, input_index, inp)
 				return inp
 			end
+		end,
+		__newindex = function (tbl, k, v)
+		end,
+		__len = function (tbl)
+			return #self.comb_tbl.additional_input_entities + 1
 		end
 	}
 	self.inputs_table = setmetatable({}, inputs_meta)
@@ -621,7 +634,10 @@ local function on_built_entity(event)
 		local unit_id = new_ent.unit_number
 		combinators_local.register(unit_id)
 
-		global.combinators[unit_id] = {formatting = true, entity = new_ent, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, usegreen = false, usered = false}
+		global.combinators[unit_id] = {
+			formatting = true, entity = new_ent, code="", variables = {}, errors="", errors2="", outputs={}, next_tick=1, 
+			additional_output_entities={}, additional_input_entities={} 
+		}
 		if new_ent.name == "lua-combinator-sb-sep" then
 			local output_proxy = make_output_proxy(new_ent)
 			global.combinators[unit_id].output_proxy = output_proxy
