@@ -6,7 +6,7 @@ Date: 2020-02-02
     - Reworked input and output api (support for multiple inputs/outputs, optimization).
 
   Bugfixes:
-    - Now it is safe to store references of prototypes data tables.
+    - Storing references of prototypes data tables in global variables will not make impossible to save game anymore.
 
 ---------------------------------------------------------------------------------------------------
 Version: 0.3.4
