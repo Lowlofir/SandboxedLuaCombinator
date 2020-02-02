@@ -30,6 +30,9 @@ table.insert(M, {
         for id,tbl in pairs(global.combinators) do
             tbl.outputs = { [1]=tbl.output }
             tbl.output = nil
+            tbl.func = nil
+            tbl.usered = nil
+            tbl.usegreen = nil
         end
     end
 })
