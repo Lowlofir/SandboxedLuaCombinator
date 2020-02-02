@@ -96,8 +96,6 @@ end
 script.on_event(defines.events.on_runtime_mod_setting_changed, on_runtime_mod_setting_changed)
 
 
-
-
 script.on_init( function ()
 	global.combinators = {}
 	global.outputs = {}
@@ -809,7 +807,6 @@ function combinator_tick(unit_nr, tick)
 	local combinator_local_dta = combinators_local[unit_nr]
 	combinator_local_dta.inputs_controller:on_tick()
 
-	local env_ro = combinator_local_dta.env_ro
 	local env_var = combinator_local_dta.env_var
 	local func = combinator_local_dta.func
 	-- assert(env_ro, 'no env')
@@ -824,14 +821,12 @@ function combinator_tick(unit_nr, tick)
 
 	local delay = tonumber(env_var.delay) or 1
 
-	env_ro.var = env_ro.var or {}
+	env_var.var = env_var.var or {}
 
 	combinator_local_dta.outputs_controller:on_post_tick()
 	if tbl.errors~="" or tbl.errors2 ~="" then
-		for _, player in pairs(game.players) do
-			if player.force == tbl.entity.last_user.force then
-				player.add_custom_alert(tbl.entity,{type="virtual", name="luacomsb_error"},"LuaCombinator Error: "..tbl.errors..tbl.errors2,true)
-			end
+		for _, player in pairs(tbl.entity.last_user.force.connected_players) do
+			player.add_custom_alert(tbl.entity,{type="virtual", name="luacomsb_error"},"LuaCombinator Error: "..tbl.errors..tbl.errors2,true)
 		end
 	end
 	tbl.next_tick = tick + delay
