@@ -384,8 +384,18 @@ local function prepare_output(o)
 	return actual_output, errors
 end
 
-function outputs_controller_class:on_post_tick()
+function outputs_controller_class:on_post_tick(legacy_output_tbl)
 	local tbl = self.comb_tbl
+
+	if legacy_output_tbl then
+		for k,v in pairs(tbl.outputs[1]) do
+			tbl.outputs[1][k] = nil
+		end
+		for k,v in pairs(legacy_output_tbl) do
+			tbl.outputs[1][k] = v
+		end
+		self.dirt_map[1] = true
+	end
 
 	for output_id,_ in pairs(self.dirt_map) do
 		local curr_out_tbl = tbl.outputs[output_id]
@@ -591,10 +601,6 @@ function load_code(code,id)
 		global.combinators[id].errors = ""
 	end
 	global.combinators[id].errors2 = ""
-	-- local _, countred = string.gsub(global.combinators[id].code, "rednet", "")
-	-- local _, countgreen = string.gsub(global.combinators[id].code, "greennet", "")
-	-- global.combinators[id].usered = (countred > 0)
-	-- global.combinators[id].usegreen = (countgreen > 0)
 	write_to_combinator(global.combinators[id].blueprint_data,global.combinators[id].code)
 	if global.combinators[id].entity.valid then
 		for _, player in pairs(game.players) do
@@ -804,6 +810,7 @@ function combinator_tick(unit_nr, tick)
 	-- assert(func, 'no func')
 
 	env_var.delay = 1
+	env_var.var = env_var.var or {}
 
 	do
 		local _,error = pcall(func)
@@ -812,9 +819,10 @@ function combinator_tick(unit_nr, tick)
 
 	local delay = tonumber(env_var.delay) or 1
 
-	env_var.var = env_var.var or {}
+	local legacy_output = rawget(env_var, 'output')
+	rawset(env_var, 'output', nil)
 
-	combinator_local_dta.outputs_controller:on_post_tick()
+	combinator_local_dta.outputs_controller:on_post_tick(legacy_output)
 	if tbl.errors~="" or tbl.errors2 ~="" then
 		for _, player in pairs(tbl.entity.last_user.force.connected_players) do
 			player.add_custom_alert(tbl.entity,{type="virtual", name="luacomsb_error"},"LuaCombinator Error: "..tbl.errors..tbl.errors2,true)
