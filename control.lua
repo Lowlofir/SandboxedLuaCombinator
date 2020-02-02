@@ -651,10 +651,6 @@ local function on_built_entity(event)
 			if not global.combinators[unit_id].errors then
 				global.combinators[unit_id].errors = ""
 			end
-			local _, countred = string.gsub(global.combinators[unit_id].code, "rednet", "")
-			local _, countgreen = string.gsub(global.combinators[unit_id].code, "greennet", "")
-			global.combinators[unit_id].usered = (countred > 0)
-			global.combinators[unit_id].usegreen = (countgreen > 0)
 			blueprint_data[1].destroy()
 		end
 		global.combinators[unit_id].blueprint_data = new_ent.surface.create_entity{name = "luacomsb_blueprint_data", position = new_ent.position, force = new_ent.force}
@@ -722,14 +718,9 @@ local function on_entity_settings_pasted(event)
 			insert_history ("luacomsb_gui_"..dst_id,global.combinators[src_id].code)
 		end
 		combinators_local[dst_id].func,global.combinators[dst_id].errors = load_combinator_code(dst_id)
-		-- combinators_local[dst_id].func = global.combinators[dst_id].func
 		if not global.combinators[dst_id].errors then
 			global.combinators[dst_id].errors = ""
 		end
-		-- local _, countred = string.gsub(global.combinators[dst_id].code, "rednet", "")
-		-- local _, countgreen = string.gsub(global.combinators[dst_id].code, "greennet", "")
-		-- global.combinators[dst_id].usered = (countred > 0)
-		-- global.combinators[dst_id].usegreen = (countgreen > 0)
 		global.combinators[dst_id].formatting = global.combinators[src_id].formatting
 		write_to_combinator(global.combinators[dst_id].blueprint_data,global.combinators[dst_id].code)
 	end
