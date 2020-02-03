@@ -1,6 +1,6 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.0
-Date: 2020-02-02
+Date: 2020-02-03
   Features:
     - Additional inputs and outputs are implemented.
     - Reworked input and output api (support for multiple inputs/outputs, optimization).
