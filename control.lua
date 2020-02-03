@@ -481,13 +481,13 @@ function inputs_controller_class:make_input(inp_id)
 	end
 
 	function single_input_meta.__index(input_tbl, k)
-		if k=='rednet' then
+		if k=='red' or k=='rednet' then
 			local rn = get_red_network(single_input_meta.inp_entity, single_input_meta.looped_outp)
-			rawset(input_tbl, 'rednet', rn)
+			rawset(input_tbl, k, rn)
 			return rn
-		elseif k=='greennet' then
+		elseif k=='green' or k=='greennet' then
 			local gn = get_green_network(single_input_meta.inp_entity, single_input_meta.looped_outp)
-			rawset(input_tbl, 'greennet', gn)
+			rawset(input_tbl, k, gn)
 			return gn
 		elseif k=='reset' then
 			rawset(input_tbl, 'rednet', nil)
