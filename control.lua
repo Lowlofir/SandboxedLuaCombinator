@@ -434,16 +434,20 @@ function outputs_controller_class:get_outputs_table()
 		__newindex = function (tbl, out_id, v) 
 			-- game.print('!'..tostring(v)..'!')
 			if not self.outputs_table[out_id] then
-				error('not tbl['..out_id..']', 2)
+				error('no such output ('..tostring(out_id)..')', 2)
 			end
 			if type(v) ~= 'table' then
-				error("type(v) ~= 'table'", 2)
+				error("only table can be assigned to output", 2)
 			end
 
 			for k,_ in pairs(self.comb_tbl.outputs[out_id]) do
 				self.comb_tbl.outputs[out_id][k] = nil
 			end
 			for k,vv in pairs(v) do
+				local valid_v = vv==nil or (type(vv)=='number' and vv >= -2147483648 and vv <= 2147483647)
+				if not valid_v then
+					error('wrong output value', 2)
+				end		
 				self.comb_tbl.outputs[out_id][k] = vv
 			end
 			self.dirt_map[out_id] = true
@@ -596,6 +600,13 @@ function setup_env(cid)
 
 	local var_meta = {
 		__index = ro_env,
+		-- __newindex = function (tbl, k, v)
+		-- 	if k=='output' then 
+		-- 		ro_env.outputs[1] = v
+		-- 	else
+		-- 		rawset(tbl, k, v)
+		-- 	end
+		-- end
 	}
 	local var_env = setmetatable(tbl.variables, var_meta)
 
