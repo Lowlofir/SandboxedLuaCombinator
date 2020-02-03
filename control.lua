@@ -600,13 +600,13 @@ function setup_env(cid)
 
 	local var_meta = {
 		__index = ro_env,
-		-- __newindex = function (tbl, k, v)
-		-- 	if k=='output' then 
-		-- 		ro_env.outputs[1] = v
-		-- 	else
-		-- 		rawset(tbl, k, v)
-		-- 	end
-		-- end
+		__newindex = function (tbl, k, v)
+			if k=='output' then 
+				ro_env.outputs[1] = v
+			else
+				rawset(tbl, k, v)
+			end
+		end
 	}
 	local var_env = setmetatable(tbl.variables, var_meta)
 
@@ -844,11 +844,11 @@ function combinator_tick(unit_nr, tick)
 
 	local delay = tonumber(env_var.delay) or 1
 
-	local legacy_output = rawget(env_var, 'output')
-	if legacy_output then
-		rawset(env_var, 'output', nil)
-		combinator_local_dta.env_ro.outputs[1] = legacy_output
-	end
+	-- local legacy_output = rawget(env_var, 'output')
+	-- if legacy_output then
+	-- 	rawset(env_var, 'output', nil)
+	-- 	combinator_local_dta.env_ro.outputs[1] = legacy_output
+	-- end
 	combinator_local_dta.outputs_controller:on_post_tick()
 	if tbl.errors~="" or tbl.errors2 ~="" then
 		for _, player in pairs(tbl.entity.last_user.force.connected_players) do
