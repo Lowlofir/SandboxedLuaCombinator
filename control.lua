@@ -235,7 +235,7 @@ function outputs_registry.assign(comb_eid, output_ent)
 	global.combinators[comb_eid].additional_output_entities = global.combinators[comb_eid].additional_output_entities or {}
 	table.insert(global.combinators[comb_eid].additional_output_entities, output_ent)
 	global.outputs[output_ent.unit_number] = comb_eid
-	game.print(output_ent.unit_number..' assigned to '..comb_eid)
+	-- game.print(output_ent.unit_number..' assigned to '..comb_eid)
 end
 
 function outputs_registry.unassign(comb_eid, output_ent)
@@ -243,7 +243,7 @@ function outputs_registry.unassign(comb_eid, output_ent)
 	assert(pos)
 	table.remove(global.combinators[comb_eid].additional_output_entities, pos)
 	global.outputs[output_ent.unit_number] = nil
-	game.print(output_ent.unit_number..' unassigned from '..comb_eid)
+	-- game.print(output_ent.unit_number..' unassigned from '..comb_eid)
 end
 
 function outputs_registry.get_assignation(output_ent_id)
@@ -257,7 +257,9 @@ function inputs_registry.assign(comb_eid, input_ent)
 	global.combinators[comb_eid].additional_input_entities = global.combinators[comb_eid].additional_input_entities or {}
 	table.insert(global.combinators[comb_eid].additional_input_entities, input_ent)
 	global.inputs[input_ent.unit_number] = comb_eid
-	combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
+	if combinators_local[comb_eid].inputs_controller then
+		combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
+	end
 	-- game.print(input_ent.unit_number..' assigned to '..comb_eid)
 end
 
@@ -266,7 +268,9 @@ function inputs_registry.unassign(comb_eid, input_ent)
 	assert(pos)
 	table.remove(global.combinators[comb_eid].additional_input_entities, pos)
 	global.inputs[input_ent.unit_number] = nil
-	combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
+	if combinators_local[comb_eid].inputs_controller then
+		combinators_local[comb_eid].inputs_controller:on_inputs_list_changed()
+	end
 	-- game.print(input_ent.unit_number..' unassigned from '..comb_eid)
 end
 
@@ -345,8 +349,8 @@ function outputs_controller_class:make_output(outp_id)
 	local single_output_meta = { __index=self.comb_tbl.outputs[outp_id] }  --
 	self.comb_tbl.outputs[outp_id] = self.comb_tbl.outputs[outp_id] or {}
 	single_output_meta.real_out_tbl = self.comb_tbl.outputs[outp_id]
+
 	function single_output_meta.__newindex(output_tbl, k, v)
-		-- game.print('__newindex('..self.comb_tbl.entity.unit_number..', '..k..', '..tostring(v)..')')
 		local valid_v = v==nil or (type(v)=='number' and v >= -2147483648 and v <= 2147483647)
 		if not valid_v then
 			error('wrong output value', 2)
@@ -384,18 +388,8 @@ local function prepare_output(o)
 	return actual_output, errors
 end
 
-function outputs_controller_class:on_post_tick(legacy_output_tbl)
+function outputs_controller_class:on_post_tick()
 	local tbl = self.comb_tbl
-
-	if legacy_output_tbl then
-		for k,v in pairs(tbl.outputs[1]) do
-			tbl.outputs[1][k] = nil
-		end
-		for k,v in pairs(legacy_output_tbl) do
-			tbl.outputs[1][k] = v
-		end
-		self.dirt_map[1] = true
-	end
 
 	for output_id,_ in pairs(self.dirt_map) do
 		local curr_out_tbl = tbl.outputs[output_id]
@@ -419,24 +413,44 @@ function outputs_controller_class:on_post_tick(legacy_output_tbl)
 end
 
 function outputs_controller_class:get_outputs_table()
-	if self.outputs_table then
-		return self.outputs_table
+	if not self.outputs_table then
+		local outputs_meta = {
+			__index = function (outputs_tbl, output_index)
+				if output_index==1 or (type(output_index)=='number' and self.comb_tbl.additional_output_entities[output_index-1]) then
+					local outp = self:make_output(output_index)
+					outputs_tbl[output_index] = outp
+					return outp
+				end
+			end,
+		}
+		self.outputs_table = setmetatable({}, outputs_meta)
 	end
-	local outputs_meta = {
-		__index = function (outputs_tbl, output_index)
-			if output_index==1 or (type(output_index)=='number' and self.comb_tbl.additional_output_entities[output_index-1]) then
-				local outp = self:make_output(output_index)
-				rawset(outputs_tbl, output_index, outp)
-				return outp
-			end
-		end,
-		__newindex = function (tbl, k, v) end,
+
+	local ext_outputs_meta = {
+		__index = self.outputs_table,
 		__len = function (tbl)
 			return #self.comb_tbl.additional_output_entities + 1
-		end
+		end,
+		__newindex = function (tbl, out_id, v) 
+			-- game.print('!'..tostring(v)..'!')
+			if not self.outputs_table[out_id] then
+				error('not tbl['..out_id..']', 2)
+			end
+			if type(v) ~= 'table' then
+				error("type(v) ~= 'table'", 2)
+			end
+
+			for k,_ in pairs(self.comb_tbl.outputs[out_id]) do
+				self.comb_tbl.outputs[out_id][k] = nil
+			end
+			for k,vv in pairs(v) do
+				self.comb_tbl.outputs[out_id][k] = vv
+			end
+			self.dirt_map[out_id] = true
+		end,
 	}
-	self.outputs_table = setmetatable({}, outputs_meta)
-	return self.outputs_table
+
+	return setmetatable({}, ext_outputs_meta)
 end
 
 
@@ -820,9 +834,11 @@ function combinator_tick(unit_nr, tick)
 	local delay = tonumber(env_var.delay) or 1
 
 	local legacy_output = rawget(env_var, 'output')
-	rawset(env_var, 'output', nil)
-
-	combinator_local_dta.outputs_controller:on_post_tick(legacy_output)
+	if legacy_output then
+		rawset(env_var, 'output', nil)
+		combinator_local_dta.env_ro.outputs[1] = legacy_output
+	end
+	combinator_local_dta.outputs_controller:on_post_tick()
 	if tbl.errors~="" or tbl.errors2 ~="" then
 		for _, player in pairs(tbl.entity.last_user.force.connected_players) do
 			player.add_custom_alert(tbl.entity,{type="virtual", name="luacomsb_error"},"LuaCombinator Error: "..tbl.errors..tbl.errors2,true)
