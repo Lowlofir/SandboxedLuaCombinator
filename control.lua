@@ -235,6 +235,9 @@ function outputs_registry.assign(comb_eid, output_ent)
 	global.combinators[comb_eid].additional_output_entities = global.combinators[comb_eid].additional_output_entities or {}
 	table.insert(global.combinators[comb_eid].additional_output_entities, output_ent)
 	global.outputs[output_ent.unit_number] = comb_eid
+	if combinators_local[comb_eid].outputs_controller then
+		combinators_local[comb_eid].outputs_controller:on_outputs_list_changed()
+	end
 	-- game.print(output_ent.unit_number..' assigned to '..comb_eid)
 end
 
@@ -243,6 +246,9 @@ function outputs_registry.unassign(comb_eid, output_ent)
 	assert(pos)
 	table.remove(global.combinators[comb_eid].additional_output_entities, pos)
 	global.outputs[output_ent.unit_number] = nil
+	if combinators_local[comb_eid].outputs_controller then
+		combinators_local[comb_eid].outputs_controller:on_outputs_list_changed()
+	end
 	-- game.print(output_ent.unit_number..' unassigned from '..comb_eid)
 end
 
@@ -457,6 +463,12 @@ function outputs_controller_class:get_outputs_table()
 	return setmetatable({}, ext_outputs_meta)
 end
 
+function outputs_controller_class:on_outputs_list_changed()
+	for k,v in pairs(self.outputs_table) do
+		self.outputs_table[k] = nil
+	end
+end
+
 
 local outputs_controller_mt = {__index = outputs_controller_class}
 
@@ -490,7 +502,9 @@ function inputs_controller_class:make_input(inp_id)
 			rawset(input_tbl, k, gn)
 			return gn
 		elseif k=='reset' then
+			rawset(input_tbl, 'red', nil)
 			rawset(input_tbl, 'rednet', nil)
+			rawset(input_tbl, 'green', nil)
 			rawset(input_tbl, 'greennet', nil)
 		end
 	end
